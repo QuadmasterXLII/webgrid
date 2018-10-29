@@ -1,0 +1,25 @@
+<video id="player" controls autoplay></video>
+
+<script>
+	console.log("hi");
+	import * as tf from '@tensorflowjs/tfjs';
+    
+	const model = await tf.loadModel('/static/tfjs/model.json')
+
+</script>
+
+
+<script type=text/javascript>
+  console.log("hi")
+  const player = document.getElementById('player');
+
+  const constraints = {
+    video: true,
+  };
+
+  navigator.mediaDevices.getUserMedia(constraints)
+    .then((stream) => {
+      player.srcObject = stream;
+    });
+</script>
+
