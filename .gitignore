@@ -1,3 +1,5 @@
 mediocre_linefinder.h5
 static/tfjs_dir/*
+static/bundle.js
+static/bundle.js.map
 tfjs-examples/*
