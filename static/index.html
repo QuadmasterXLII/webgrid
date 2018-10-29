@@ -1,25 +1,21 @@
-<video id="player" controls autoplay></video>
+<html>
+ <head>
+ 	<title> gridslam </title>
+ 	<script src="bundle.js"></script>
+ </head>
 
-<script>
-	console.log("hi");
-	import * as tf from '@tensorflowjs/tfjs';
-    
-	const model = await tf.loadModel('/static/tfjs/model.json')
+ <body>
+Begin the Ultrasound Scan at any time<br/>
 
-</script>
+Alpha: <span id=alpha></span><br/>
+Beta: <span id=beta></span><br/>
+Gamma: <span id=gamma></span><br/>
+<br>
+Webkit: <span id=webkit></span><br/>
 
+<video id="player" controls autoplay playsinline></video>
 
-<script type=text/javascript>
-  console.log("hi")
-  const player = document.getElementById('player');
-
-  const constraints = {
-    video: true,
-  };
-
-  navigator.mediaDevices.getUserMedia(constraints)
-    .then((stream) => {
-      player.srcObject = stream;
-    });
-</script>
+<span id=log>halp</span>
+</body>
+</html>
 
