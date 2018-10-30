@@ -8,10 +8,27 @@ console.log("running");
 
 function log(l){
 	$("#log").append(l + "<br>");
+	console.log(l);
 
 }
 
+function runmodel() {
+	log("getting image");
+    var image = window.webcam.capture();
+    window.image = image;
+    //log("image " + image.shape);
 
+    log("running model");
+    var output = window.model.predict(image);
+    output = tf.reshape(output, [128, 128, 2]);
+
+    window.output = output;
+    
+    output = tf.concat([output, tf.add(1, tf.mul(- 0.001 , output))], 2);
+    tf.toPixels(output, document.getElementById("segmentation"));
+    log("done");
+
+}
 
 async function run() {
     console.log("document.load happened");
@@ -26,26 +43,32 @@ async function run() {
 
     window.webcam = new Webcam(document.getElementById("player"));
     
-    await webcam.setup();
-
+    await window.webcam.setup();
+    
+    window.webcam.webcamElement.width = 128;
+    window.webcam.webcamElement.height = 128;
 
     log("Webcam setup");
 
     window.events = [];
 
 	$("#save").click(function () {
-			    $.ajax({
-			        type: "POST",
-			        contentType: "application/json; charset=utf-8",
-			        url: "/upload",
-			        data: JSON.stringify(events),
-			        datatype: "json"
-			    });
-			    //events = []
-			});
+	    $.ajax({
+	        type: "POST",
+	        contentType: "application/json; charset=utf-8",
+	        url: "/upload",
+	        data: JSON.stringify(events),
+	        datatype: "json"
+	    });
+	    //events = []
+	});
+
+	$("#runmodel").click(function () {
+        runmodel();
+	});
 
 	if (window.DeviceOrientationEvent) {
-	    $("#log").append("registering event")
+	    log("registering event")
 	    window.addEventListener('deviceorientation', function (evt) {
 	        window.events.push({
 	            time: Date.now() / 1000,
