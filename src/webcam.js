@@ -45,7 +45,7 @@ export class Webcam {
 
       // Normalize the image between -1 and 1. The image comes in between 0-255,
       // so we divide by 127 and subtract 1.
-      return batchedImage.toFloat().div(tf.scalar(1));
+      return batchedImage.toFloat().div(tf.scalar(255.));
     });
   }
 
@@ -83,7 +83,10 @@ export class Webcam {
       navigator.getUserMedia = navigator.getUserMedia ||
           navigatorAny.webkitGetUserMedia || navigatorAny.mozGetUserMedia ||
           navigatorAny.msGetUserMedia;
+
+
       if (navigator.getUserMedia) {
+        console.log("got webcam");
         navigator.getUserMedia(
             {video: true},
             stream => {
@@ -99,7 +102,27 @@ export class Webcam {
               reject();
             });
       } else {
-        reject();
+        if (navigator.mediaDevices.getUserMedia){
+          navigator.mediaDevices.getUserMedia(
+            {video: true},
+            stream => {
+              this.webcamElement.srcObject = stream;
+              this.webcamElement.addEventListener('loadeddata', async () => {
+                this.adjustVideoSize(
+                    this.webcamElement.videoWidth,
+                    this.webcamElement.videoHeight);
+                resolve();
+              }, false);
+            },
+            error => {
+              reject();
+            });
+        } else {
+
+
+        
+          reject();
+        }
       }
     });
   }

@@ -25,8 +25,11 @@ function runmodel() {
     window.output = output;
     
     output = tf.concat([output, tf.add(1, tf.mul(- 0.001 , output))], 2);
+
+    output = output.clipByValue(0, 1)
     tf.toPixels(output, document.getElementById("segmentation"));
     log("done");
+    setTimeout(runmodel, .1);
 
 }
 
