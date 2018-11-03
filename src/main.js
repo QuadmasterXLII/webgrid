@@ -36,7 +36,7 @@ function runmodel () {
 async function run () {
   log('document.load happened')
 
-  window.model = await tf.loadModel('tfjs_dir/model.json')
+  window.model = await tf.loadModel('/webgrid/static/tfjs_dir/model.json')
 
   log('model loaded')
 

@@ -34694,7 +34694,7 @@ function runmodel() {
 async function run() {
   log('document.load happened');
 
-  window.model = await _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["loadModel"]('tfjs_dir/model.json');
+  window.model = await _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["loadModel"]('/webgrid/static/tfjs_dir/model.json');
 
   log('model loaded');
 
