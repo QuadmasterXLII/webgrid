@@ -5,6 +5,8 @@ import { Webcam } from './webcam'
 
 import * as $ from 'jquery'
 
+import * as apclust from 'affinity-propagation'
+
 function log (l) {
   // $('#log').append(l + '<br>')
   console.log(l)
@@ -31,14 +33,26 @@ function runmodel () {
   tf.toPixels(output, document.getElementById('segmentation'))
   log('done')
 
-  setTimeout(skeletonize(), 10)
-  // running = false;
+  setTimeout(getlines, 30)
+  //running = false;
   if (running) {
     setTimeout(runmodel, 100)
   }
 }
-
-function skeletonize () {
+function drawLines(lines, mat) {
+	for (let i = 0; i < lines.rows; ++i) {
+    let rho = lines.data32F[i * 2];
+    let theta = lines.data32F[i * 2 + 1];
+    let a = Math.cos(theta);
+    let b = Math.sin(theta);
+    let x0 = a * rho;
+    let y0 = b * rho;
+    let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
+    let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
+    cv.line(mat, startPoint, endPoint, [125, 0, 0, 255]);
+}
+}
+function getlines () {
   var mat = cv.imread(document.getElementById('segmentation'))
   var gr = new cv.Mat()
   cv.cvtColor(mat, gr, cv.COLOR_RGBA2GRAY, 0)
@@ -63,8 +77,33 @@ function skeletonize () {
 
   cv.HoughLines(skele, lines, 1, Math.PI / 180,
               30, 0, 0, 0, Math.PI);
-// draw lines
-for (let i = 0; i < lines.rows; ++i) {
+  drawLines(lines, dst)
+  
+  var lineDistMat = []
+  for (let i = 0; i < lines.rows; ++i){
+    lineDistMat.push([])
+    for (let j = 0; j < lines.rows; ++j) {
+      var rho1 = lines.data32F[i * 2];
+      var theta1 = lines.data32F[i * 2 + 1];
+
+      let rho2 = lines.data32F[j * 2];
+      let theta2 = lines.data32F[j * 2 + 1];
+
+      let distance1 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2))
+      rho1 = rho1 * -1
+      theta1 = theta1 - Math.PI
+      let distance2 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2))
+      //console.log(distance1, distance2, rho1, theta1)
+      lineDistMat[i].push(Math.max(-distance1, -distance2))
+  	}
+  }
+  //console.log(lineDistMat)
+  var cluster_result = apclust.getClusters(lineDistMat, {preference:window.preference, damping:.5})
+  //console.log(cluster_result)
+  //console.table(lineDistMat)
+  for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+  	let i = cluster_result.exemplars[j]
+  	console.log(i)
     let rho = lines.data32F[i * 2];
     let theta = lines.data32F[i * 2 + 1];
     let a = Math.cos(theta);
@@ -73,15 +112,15 @@ for (let i = 0; i < lines.rows; ++i) {
     let y0 = b * rho;
     let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
     let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
-    cv.line(dst, startPoint, endPoint, [255, 0, 0, 255]);
-}
+    cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+  }
+
 cv.imshow('lines', dst);
-dst.delete(); lines.delete();
-
+  dst.delete();
 
 }
-
-async function run () {
+window.preference = -.3;
+async function init () {
   log('document.load happened')
 
   window.model = await tf.loadModel('/static/tfjs_dir/model.json')
@@ -112,6 +151,10 @@ async function run () {
 
   $('#runmodel').click(function () {
     running = true
+    runmodel()
+  })
+
+  $('#runonce').click(function () {
     runmodel()
   })
 
@@ -150,7 +193,7 @@ async function run () {
        */
 }
 
-function runAwait () {
-  run()
+function initAwait () {
+  init()
 }
-window.onload = runAwait
+window.onload = initAwait
