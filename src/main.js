@@ -39,6 +39,25 @@ function runmodel () {
     setTimeout(runmodel, 100)
   }
 }
+
+function intersection(line1, line2){
+    //Finds the intersection of two lines given in Hesse normal form.
+
+//
+    //Returns closest integer pixel locations.
+    //See https://stackoverflow.com/a/383527/5087436
+/*
+    rho1, theta1 = line1[0]
+    rho2, theta2 = line2[0]
+    A = np.array([
+        [np.cos(theta1), np.sin(theta1)],
+        [np.cos(theta2), np.sin(theta2)]
+    ])
+    b = np.array([[rho1], [rho2]])
+    x0, y0 = np.linalg.solve(A, b)
+    
+    return [[x0, y0]]*/
+}
 function drawLines(lines, mat) {
 	for (let i = 0; i < lines.rows; ++i) {
     let rho = lines.data32F[i * 2];
@@ -120,6 +139,26 @@ cv.imshow('lines', dst);
 
 }
 window.preference = -.3;
+var sessionid = Math.round(90000 * Math.random())
+var recording = false
+function submitPhoto () {
+  var context = document.getElementById("cameraframe").getContext("2d")
+
+  context.drawImage(window.webcam.webcamElement, 0, 0, 128, 128)
+  $.ajax({
+  	type:"POST",
+  	url:"/imageupload/" + (Math.random() + sessionid), 
+  	data: {
+  		image: document.getElementById("cameraframe").toDataURL('image/png')
+  	}
+
+  })
+  if (recording){
+    setTimeout(submitPhoto, 300)
+  }
+}
+
+
 async function init () {
   log('document.load happened')
 
@@ -161,6 +200,11 @@ async function init () {
   $('#stopmodel').click(function () {
     running = false
   })
+  $('#submit').click(function () {
+  	recording = !recording
+  	submitPhoto()
+  	
+  });
 
   if (window.DeviceOrientationEvent) {
     log('registering event')

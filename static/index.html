@@ -16,16 +16,19 @@ Webkit: <span id=webkit></span><br/>
 <button id=runmodel> Run Model </button> 
 <button id=runonce> Run Once </button>
 <button id=stopmodel> Stop Model </button><br>
+<button id=submit> Submit Photo for Training </button><br>
 
 <video id="player" controls autoplay playsinline></video>
 <div>
 
 <canvas id="segmentation" width="128 pix" height="128 pix"></canvas>
+
+<canvas id="cameraframe" width="512 pix" height="512 pix">
+</canvas>
 </div>
 <div>
 <canvas id="skeleton" width="128 pix" height="128 pix"></canvas>
-</div>
-<div>
+
 <canvas id="lines" width="128 pix" height="128 pix"></canvas>
 </div>
 <span id=log></span>
