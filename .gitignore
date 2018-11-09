@@ -4,3 +4,8 @@ node_modules/*
 static/bundle.js
 static/bundle.js.map
 tfjs-examples/*
+image_uploads/*
+image_uploads_small/*
+*.ipynb
+.ipynb_checkpoints/*
+

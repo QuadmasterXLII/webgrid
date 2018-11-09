@@ -1,4 +1,7 @@
-from flask import Flask
+from flask import Flask, request
+import os
+from werkzeug.utils import secure_filename
+from binascii import a2b_base64
 app = Flask(__name__)
 
 @app.route("/")
@@ -10,7 +13,12 @@ def hello():
 def imageupload(name):
     filename = secure_filename(str(name) + ".png")
     out = open(os.path.join("image_uploads", filename), "wb")
-    out.write(request.data)
+    image_enc = request.form["image"]
+    header = "data:image/png;base64,"
+    assert(image_enc[:len(header)] == header)
+    print(len(image_enc) % 4)
+    image_enc = image_enc[len(header):]
+    out.write(a2b_base64(image_enc))
     out.close()
     return ''
 
