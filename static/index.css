@@ -1,0 +1,30 @@
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+#runmodel, #runonce, #submit{
+    font-size: 2rem;
+}
+
+#cameraframe {
+    display: none;
+}
+
+#top-row, #bottom-row{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+#top-row video, #top-row canvas, #bottom-row canvas {
+    width: 100%;
+    height: auto;
+}
+
+.container {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    text-align: center;
+    max-width: 9000px;
+}
