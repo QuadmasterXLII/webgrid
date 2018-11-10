@@ -47397,7 +47397,7 @@ function log(l) {
   console.log(l);
 }
 var running = false;
-function runmodel() {
+async function runmodel() {
   log('getting image');
   var output = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["tidy"](() => {
     var image = window.webcam.capture();
@@ -47416,13 +47416,34 @@ function runmodel() {
     return output.add(-0.5).mul(3000).clipByValue(0, 1);
   });
   _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["toPixels"](output, document.getElementById('segmentation'));
-  log('done');
+  //log('done')
 
-  setTimeout(getlines, 30);
+  window.output_array = await output.slice([0, 0, 1], [128, 128, 1]).data();
+
+  getlines(window.output_array);
   //running = false;
   if (running) {
-    setTimeout(runmodel, 100);
+    setTimeout(runmodel, 30);
   }
+}
+
+function intersection(line1, line2) {
+  //Finds the intersection of two lines given in Hesse normal form.
+
+  //
+  //Returns closest integer pixel locations.
+  //See https://stackoverflow.com/a/383527/5087436
+  /*
+      rho1, theta1 = line1[0]
+      rho2, theta2 = line2[0]
+      A = np.array([
+          [np.cos(theta1), np.sin(theta1)],
+          [np.cos(theta2), np.sin(theta2)]
+      ])
+      b = np.array([[rho1], [rho2]])
+      x0, y0 = np.linalg.solve(A, b)
+      
+      return [[x0, y0]]*/
 }
 function drawLines(lines, mat) {
   for (let i = 0; i < lines.rows; ++i) {
@@ -47437,17 +47458,17 @@ function drawLines(lines, mat) {
     cv.line(mat, startPoint, endPoint, [125, 0, 0, 255]);
   }
 }
-function getlines() {
-  var mat = cv.imread(document.getElementById('segmentation'));
+function getlines(array) {
+  window.mat = cv.matFromArray(128, 128, cv.CV_32F, array);
   var gr = new cv.Mat();
-  cv.cvtColor(mat, gr, cv.COLOR_RGBA2GRAY, 0);
-  cv.threshold(gr, gr, 150, 256, cv.THRESH_BINARY_INV);
-
+  mat.convertTo(mat, cv.CV_8UC1);
+  cv.threshold(mat, gr, .5, 256, cv.THRESH_BINARY_INV);
+  window.gr = gr;
   var skele = cv.Mat.zeros(128, 128, cv.CV_8UC1);
   var temp = cv.Mat.zeros(128, 128, cv.CV_8UC1);
   var elem = cv.getStructuringElement(cv.MORPH_CROSS, new cv.Size(3, 3));
   var i;
-  for (i = 0; i < 12; i++) {
+  for (i = 0; i < 30; i++) {
     cv.morphologyEx(gr, temp, cv.MORPH_OPEN, elem);
     cv.bitwise_not(temp, temp);
     cv.bitwise_and(gr, temp, temp);
@@ -47460,8 +47481,11 @@ function getlines() {
   let dst = cv.Mat.zeros(skele.rows, skele.cols, cv.CV_8UC3);
   let lines = new cv.Mat();
 
-  cv.HoughLines(skele, lines, 1, Math.PI / 180, 30, 0, 0, 0, Math.PI);
+  cv.HoughLines(skele, lines, 1, Math.PI / 180, 27, 0, 0, 0, Math.PI);
   drawLines(lines, dst);
+  if (lines.rows < 2) {
+    return;
+  }
 
   var lineDistMat = [];
   for (let i = 0; i < lines.rows; ++i) {
@@ -47481,7 +47505,7 @@ function getlines() {
       lineDistMat[i].push(Math.max(-distance1, -distance2));
     }
   }
-  //console.log(lineDistMat)
+  //console.table(lineDistMat)
   var cluster_result = affinity_propagation__WEBPACK_IMPORTED_MODULE_3__["getClusters"](lineDistMat, { preference: window.preference, damping: .5 });
   //console.log(cluster_result)
   //console.table(lineDistMat)
@@ -47502,8 +47526,29 @@ function getlines() {
   cv.imshow('lines', dst);
   dst.delete();
 }
-window.preference = -.3;
+window.preference = -.6;
+var sessionid = Math.round(90000 * Math.random());
+var recording = false;
+function submitPhoto() {
+  var context = document.getElementById("cameraframe").getContext("2d");
+
+  context.drawImage(window.webcam.webcamElement, 0, 0, 512, 512);
+  jquery__WEBPACK_IMPORTED_MODULE_2__["ajax"]({
+    type: "POST",
+    url: "/imageupload/" + (Math.random() + sessionid),
+    data: {
+      image: document.getElementById("cameraframe").toDataURL('image/png')
+    }
+
+  });
+  if (recording) {
+    setTimeout(submitPhoto, 300);
+  }
+}
+
 async function init() {
+  //screen.lockOrientationUniversal = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation;
+  //screen.lockOrientationUniversal("portrait-primary")
   log('document.load happened');
 
   window.model = await _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["loadModel"]('/webgrid/static/tfjs_dir/model.json');
@@ -47520,21 +47565,25 @@ async function init() {
   log('Webcam setup');
 
   window.events = [];
-
-  jquery__WEBPACK_IMPORTED_MODULE_2__('#save').click(function () {
-    jquery__WEBPACK_IMPORTED_MODULE_2__["ajax"]({
+  /*
+  $('#save').click(function () {
+    $.ajax({
       type: 'POST',
       contentType: 'application/json; charset=utf-8',
       url: '/upload',
       data: JSON.stringify(window.events),
       datatype: 'json'
-    });
+    })
     // events = []
-  });
-
+  })
+  */
   jquery__WEBPACK_IMPORTED_MODULE_2__('#runmodel').click(function () {
-    running = true;
-    runmodel();
+    running = !running;
+    jquery__WEBPACK_IMPORTED_MODULE_2__("#runmodel").text(running ? "Stop Model" : "Run Model");
+    if (running) {
+
+      runmodel();
+    }
   });
 
   jquery__WEBPACK_IMPORTED_MODULE_2__('#runonce').click(function () {
@@ -47543,6 +47592,16 @@ async function init() {
 
   jquery__WEBPACK_IMPORTED_MODULE_2__('#stopmodel').click(function () {
     running = false;
+  });
+  jquery__WEBPACK_IMPORTED_MODULE_2__('#submit').click(function () {
+    recording = !recording;
+    window.webcam.webcamElement.width = recording ? 512 : 128;
+    window.webcam.webcamElement.height = window.webcam.webcamElement.width;
+
+    jquery__WEBPACK_IMPORTED_MODULE_2__('#submit').text(recording ? "Stop Recording" : "Record and Upload");
+    if (recording) {
+      submitPhoto();
+    }
   });
 
   if (window.DeviceOrientationEvent) {
