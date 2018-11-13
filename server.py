@@ -16,10 +16,11 @@ def imageupload(name):
     image_enc = request.form["image"]
     header = "data:image/png;base64,"
     assert(image_enc[:len(header)] == header)
-    print(len(image_enc) % 4)
-    image_enc = image_enc[len(header):]
-    out.write(a2b_base64(image_enc))
-    out.close()
+    print(len(image_enc))
+    if len(image_enc) < 9000000:
+        image_enc = image_enc[len(header):]
+        out.write(a2b_base64(image_enc))
+        out.close()
     return ''
 
 if __name__ == "__main__":
