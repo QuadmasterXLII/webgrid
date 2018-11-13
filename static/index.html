@@ -7,31 +7,33 @@
     <link rel="shortcut icon" href="favicon.ico">
   </head>
   <body>
-    <div id="top-row">
-      <video id="player" controls autoplay playsinline></video>
-      <canvas id="segmentation" width="128 pix" height="128 pix"></canvas>
+    <div id="main-content">
+      <div class="container">
+        <button id="runmodel" class="btn btn-primary"> Run Model </button> 
+        <button id="runonce" class="btn btn-primary"> Run Once </button>
+        <button id="submit" class="btn btn-primary"> Record and Upload </button>
+      </div>
+      <div id="top-row">
+        <video id="player" controls autoplay playsinline></video>
+        <canvas id="segmentation" width="128 pix" height="128 pix"></canvas>
 
-      <canvas id="cameraframe" width="512 pix" height="512 pix">
-      </canvas>
-    </div>
-    <div id="bottom-row">
-      <canvas id="skeleton" width="128 pix" height="128 pix"></canvas>
+        <canvas id="cameraframe" width="512 pix" height="512 pix">
+        </canvas>
+      </div>
+      <div id="bottom-row">
+        <canvas id="skeleton" width="128 pix" height="128 pix"></canvas>
 
-      <canvas id="lines" width="128 pix" height="128 pix"></canvas>
+        <canvas id="lines" width="128 pix" height="128 pix"></canvas>
+      </div>
+      
+      Alpha: <span id=alpha></span><br/>
+      Beta: <span id=beta></span><br/>
+      Gamma: <span id=gamma></span><br/>
+      <br>
+      Webkit: <span id=webkit></span><br/>
+      <span id=log></span>
+      <script src="opencv.js" type="text/javascript"></script>
     </div>
-    <div class="container">
-      <button id="runmodel" class="btn btn-primary"> Run Model </button> 
-      <button id="runonce" class="btn btn-primary"> Run Once </button>
-      <button id="submit" class="btn btn-primary"> Record and Upload </button>
-    </div>
-    Alpha: <span id=alpha></span><br/>
-    Beta: <span id=beta></span><br/>
-    Gamma: <span id=gamma></span><br/>
-    <br>
-    Webkit: <span id=webkit></span><br/>
-    <span id=log></span>
-    <script src="opencv.js" type="text/javascript"></script>
-
   </body>
 </html>
 
