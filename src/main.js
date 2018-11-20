@@ -7,19 +7,22 @@ import * as $ from 'jquery'
 
 import * as apclust from 'affinity-propagation'
 
+
+
 function log (l) {
   // $('#log').append(l + '<br>')
   console.log(l)
 }
 var running = false
 async function runmodel () {
-  log('getting image')
+  //log('getting image')
+  var imu_idx = window.events.length - 1 
   var output = tf.tidy(() => {
     var image = window.webcam.capture()
     window.image = image
     // log("image " + image.shape);
 
-    log('running model')
+    //log('running model')
     var output = window.model.predict(image)
 
     output = tf.reshape(output, [128, 128, 2])
@@ -30,12 +33,12 @@ async function runmodel () {
 
     return output.add(-0.5).mul(3000).clipByValue(0, 1)
   })
-  tf.toPixels(output, document.getElementById('segmentation'))
+  //tf.toPixels(output, document.getElementById('segmentation'))
   //log('done')
 
   window.output_array = await output.slice([0, 0, 1], [128, 128, 1]).data()
 
-  getlines(window.output_array)
+  getlines(window.output_array, imu_idx)
   //running = false;
   if (running) {
     setTimeout(runmodel, 30)
@@ -62,8 +65,8 @@ function intersection(line1, line2){
 }
 function drawLines(lines, mat) {
 	for (let i = 0; i < lines.rows; ++i) {
-    let rho = lines.data32F[i * 2];
-    let theta = lines.data32F[i * 2 + 1];
+    let rho = lines.data32F[i * 3];
+    let theta = lines.data32F[i * 3 + 1];
     let a = Math.cos(theta);
     let b = Math.sin(theta);
     let x0 = a * rho;
@@ -71,9 +74,28 @@ function drawLines(lines, mat) {
     let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
     let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
     cv.line(mat, startPoint, endPoint, [125, 0, 0, 255]);
+  }
 }
+function mat32FToArray(mat) {
+  res = []
+  for (let i = 0; i < lines.rows; ++i) {
+    res.push([])
+    for (let j = 0; j < lines.cols; ++j) {
+      res[i].push(lines.data32F[i * lines.cols + j])
+    }
+  }
+  return res
 }
-function getlines (array) {
+
+var run_once = false
+var imu_yaw2grid_yaw_delta
+
+
+function mod1(x) {
+  return (x % 1 + 1) % 1
+}
+window.prune_strat = "mostvotes"
+function getlines (array, imu_idx) {
   window.mat = cv.matFromArray(128, 128, cv.CV_32F, array)
   var gr = new cv.Mat()
   mat.convertTo(mat, cv.CV_8UC1)
@@ -107,11 +129,11 @@ function getlines (array) {
   for (let i = 0; i < lines.rows; ++i){
     lineDistMat.push([])
     for (let j = 0; j < lines.rows; ++j) {
-      var rho1 = lines.data32F[i * 2];
-      var theta1 = lines.data32F[i * 2 + 1];
+      var rho1 = lines.data32F[i * 3];
+      var theta1 = lines.data32F[i * 3 + 1];
 
-      let rho2 = lines.data32F[j * 2];
-      let theta2 = lines.data32F[j * 2 + 1];
+      let rho2 = lines.data32F[j * 3];
+      let theta2 = lines.data32F[j * 3 + 1];
 
       let distance1 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2))
       rho1 = rho1 * -1
@@ -123,24 +145,119 @@ function getlines (array) {
   }
   //console.table(lineDistMat)
   var cluster_result = apclust.getClusters(lineDistMat, {preference:window.preference, damping:.5})
-  //console.log(cluster_result)
+  console.log(cluster_result)
   //console.table(lineDistMat)
-  for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-  	let i = cluster_result.exemplars[j]
-  	console.log(i)
-    let rho = lines.data32F[i * 2];
-    let theta = lines.data32F[i * 2 + 1];
-    let a = Math.cos(theta);
-    let b = Math.sin(theta);
-    let x0 = a * rho;
-    let y0 = b * rho;
-    let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
-    let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
-    cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
-  }
+  
+  if (cluster_result.converged){
+    var lines_pruned = []
+    if (window.prune_strat == "mostvotes"){
+      var cluster_exemplar_lookup = []
+      
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+        cluster_exemplar_lookup[cluster_result.exemplars[j]] = j
+        lines_pruned.push([0, 0, 0])
+      }
+      
+      for (let i = 0; i < lines.rows; ++i){
+        var cluster_idx = cluster_exemplar_lookup[cluster_result.clusters[i]]
+        
+        if(lines.data32F[i * 3 + 2] > lines_pruned[cluster_idx][2]){
+           let rho = lines.data32F[i * 3];
+           let theta = lines.data32F[i * 3 + 1];
+           let score = lines.data32F[i * 3 + 2];
+           
+           lines_pruned[cluster_idx] = [rho, theta, score]
+        }
 
-cv.imshow('lines', dst);
-  dst.delete();
+      }
+      
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+        
+        let rho = lines_pruned[j][0];
+        let theta = lines_pruned[j][1];
+        let a = Math.cos(theta);
+        let b = Math.sin(theta);
+        let x0 = a * rho;
+        let y0 = b * rho;
+        let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
+        let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
+        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+      }
+
+    } else {
+
+
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+      	let i = cluster_result.exemplars[j]
+        let rho = lines.data32F[i * 3];
+        let theta = lines.data32F[i * 3 + 1];
+        lines_pruned.push([rho, theta])
+        let a = Math.cos(theta);
+        let b = Math.sin(theta);
+        let x0 = a * rho;
+        let y0 = b * rho;
+        let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
+        let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
+        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+      }
+    }
+
+
+    cv.imshow('lines', dst);
+
+    $.ajax({
+      type: "POST",
+      url: "/linestotransform",
+      contentType: 'application/json',
+      data: JSON.stringify({
+        "imu" : events[imu_idx],
+        "lines" : lines_pruned,
+        "shape" : [window.webcam.webcamElement.videoWidth, window.webcam.webcamElement.videoHeight]
+      }),
+      success: (data) => {
+        var vector = data.vector
+        
+
+        if (!run_once) {
+          imu_yaw2grid_yaw_delta = vector[5] + events[imu_idx].alpha
+          console.log(imu_yaw2grid_yaw_delta)
+          run_once = true
+        } else {
+          var correct_yaw_grid_coords = -events[imu_idx].alpha + imu_yaw2grid_yaw_delta
+          var offset = correct_yaw_grid_coords - vector[5]
+
+          var cos = Math.cos(offset * Math.PI / 180)
+          var sin = Math.sin(offset * Math.PI / 180)
+          var x = mod1( cos * vector[0] + sin * vector[1])
+          var y = mod1(-sin * vector[0] + cos * vector[1])
+          vector[0] = x
+          vector[1] = y
+          vector[5] = correct_yaw_grid_coords
+        
+
+
+
+        }
+        
+        if (data.error < 30){
+
+
+          $("#transform").text(vector)
+          $("#error").text(data.error)
+
+          
+          window.trackingctx = document.getElementById("tracking").getContext("2d")
+
+          window.trackingctx.fillStyle = "rgba(255,255,255,1)"
+          window.trackingctx.fillRect(0, 0, 128, 128)
+          window.trackingctx.fillStyle = "rgba(255,0,0,1)"
+          window.trackingctx.fillRect(128 * x, 128 - 128 * y, 4, 4)
+        }
+
+      }
+    })
+    dst.delete();
+  }
 
 }
 window.preference = -.6;
@@ -152,7 +269,7 @@ function submitPhoto () {
   context.drawImage(window.webcam.webcamElement, 0, 0, 512, 512)
   $.ajax({
   	type:"POST",
-  	url:"/imageupload/" + (Math.random() + sessionid), 
+  	url:"http://ec2-18-188-175-17.us-east-2.compute.amazonaws.com:4000/imageupload/" + (Math.random() + sessionid), 
   	data: {
   		image: document.getElementById("cameraframe").toDataURL('image/png')
   	}
@@ -251,6 +368,7 @@ async function init () {
           player.srcObject = stream;
         });
        */
+  
 }
 
 function initAwait () {
