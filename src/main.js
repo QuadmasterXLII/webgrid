@@ -7,6 +7,8 @@ import * as $ from 'jquery'
 
 import * as apclust from 'affinity-propagation'
 
+//const GMM = require("gaussian-mixture-model")
+var clustermaker = require("clusters")
 
 
 function log (l) {
@@ -51,19 +53,22 @@ function intersection(line1, line2){
 //
     //Returns closest integer pixel locations.
     //See https://stackoverflow.com/a/383527/5087436
-/*
-    rho1, theta1 = line1[0]
-    rho2, theta2 = line2[0]
-    A = np.array([
-        [np.cos(theta1), np.sin(theta1)],
-        [np.cos(theta2), np.sin(theta2)]
+
+    let rho1 = line1[0]
+    let theta1 = line1[1]
+    let rho2 = line2[0]
+    let theta2 = line2[1]
+    let A = cv.matFromArray(2, 2, cv.CV_32F, [
+        Math.cos(theta1), Math.sin(theta1),
+        Math.cos(theta2), Math.sin(theta2)
     ])
-    b = np.array([[rho1], [rho2]])
-    x0, y0 = np.linalg.solve(A, b)
+    let b = cv.matFromArray(2, 1, cv.CV_32F, [rho1, rho2])
+    let res = new cv.Mat()
+    cv.gemm(A.inv(cv.DECOMP_LU), b, 1, cv.matFromArray(2, 1, cv.CV_32F, [0, 0]), 0, res, 0)
     
-    return [[x0, y0]]*/
+    return res
 }
-function drawLines(lines, mat) {
+function drawLines(lines, mat, color) {
 	for (let i = 0; i < lines.rows; ++i) {
     let rho = lines.data32F[i * 3];
     let theta = lines.data32F[i * 3 + 1];
@@ -73,27 +78,94 @@ function drawLines(lines, mat) {
     let y0 = b * rho;
     let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
     let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
-    cv.line(mat, startPoint, endPoint, [125, 0, 0, 255]);
+    cv.line(mat, startPoint, endPoint, color);
+  }
+}
+function drawLinesJ(lines, mat, color) {
+  for (let i = 0; i < lines.length; ++i) {
+    let rho = lines[i][0];
+    let theta = lines[i][1];
+    let a = Math.cos(theta);
+    let b = Math.sin(theta);
+    let x0 = a * rho;
+    let y0 = b * rho;
+    let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
+    let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
+    cv.line(mat, startPoint, endPoint, color);
   }
 }
 function mat32FToArray(mat) {
-  res = []
-  for (let i = 0; i < lines.rows; ++i) {
+  var res = []
+  for (let i = 0; i < mat.rows; ++i) {
     res.push([])
-    for (let j = 0; j < lines.cols; ++j) {
-      res[i].push(lines.data32F[i * lines.cols + j])
+    for (let j = 0; j < mat.cols; ++j) {
+      res[i].push(mat.data32F[i * mat.cols + j])
     }
   }
   return res
 }
 
 var run_once = false
-var imu_yaw2grid_yaw_delta
+var 
 
+function sortlines(lines, reference) {
+  function value(line){
+    return intersection(line, reference[0]).data32F[0]
+  }
+  return lines.sort((a, b) => value(a) - value(b))
+}
 
 function mod1(x) {
   return (x % 1 + 1) % 1
 }
+function distance(p1, p2){
+  return Math.sqrt((p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1]))
+}
+function embed(l){
+  return [Math.sin(2 * l[1]), Math.cos(2 * l[1])]
+}  
+function split(lines) {
+  window.trackingctx = document.getElementById("tracking").getContext("2d")
+
+
+  clustermaker.k(2)
+  clustermaker.iterations(209)
+  var data = []
+  lines.forEach(l => {
+    data.push(embed(l))
+    //the following is horrible, but avoids singularities in the GMM code I'm using
+    /*gmm.addPoint(embed(l))
+    gmm.addPoint([embed(l)[0], embed(l)[1] + .03])
+    gmm.addPoint([embed(l)[0] + .03, embed(l)[1]])*/
+
+  })
+  clustermaker.data(data)
+  var res = clustermaker.clusters()
+  //gmm.runEM(7)
+  var lines1 = []
+  var lines2 = []
+  window.trackingctx.fillStyle = "rgba(255,255,255,1)"
+          window.trackingctx.fillRect(0, 0, 128, 128)
+  lines.forEach(l => {
+    //if(gmm.predictNormalize(embed(l))[0] > .5){
+    if(distance(embed(l), res[0].centroid) < distance(embed(l), res[1].centroid)) {
+      lines1.push(l)
+
+      window.trackingctx.fillStyle = "rgba(255,0,0,1)"
+      window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+
+    } else {
+      lines2.push(l)
+      window.trackingctx.fillStyle = "rgba(0,255,0,1)"
+      window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+
+    }
+    
+  })
+  return [lines1, lines2]
+
+}
+
 window.prune_strat = "mostvotes"
 function getlines (array, imu_idx) {
   window.mat = cv.matFromArray(128, 128, cv.CV_32F, array)
@@ -120,7 +192,7 @@ function getlines (array, imu_idx) {
 
   cv.HoughLines(skele, lines, 1, Math.PI / 180,
               27, 0, 0, 0, Math.PI);
-  drawLines(lines, dst)
+  drawLines(lines, dst, [76, 0, 0, 255])
   if (lines.rows < 2){
     return
   }
@@ -202,9 +274,23 @@ function getlines (array, imu_idx) {
       }
     }
 
+    /*let i1 = mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
+    let i2 = mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
+    console.log(i1)
+    cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
 
+
+    
+
+
+    var split_lines = split(lines_pruned)
+    console.log(split_lines)
+
+    drawLinesJ(split_lines[0], dst, [0, 255, 0, 255])
+    drawLinesJ(split_lines[1], dst, [255, 0, 255, 255])
+    
     cv.imshow('lines', dst);
-
+    /*
     $.ajax({
       type: "POST",
       url: "/linestotransform",
@@ -217,14 +303,14 @@ function getlines (array, imu_idx) {
       success: (data) => {
         var vector = data.vector
         
-
+        var offset
         if (!run_once) {
           imu_yaw2grid_yaw_delta = vector[5] + events[imu_idx].alpha
           console.log(imu_yaw2grid_yaw_delta)
           run_once = true
         } else {
           var correct_yaw_grid_coords = -events[imu_idx].alpha + imu_yaw2grid_yaw_delta
-          var offset = correct_yaw_grid_coords - vector[5]
+          offset = correct_yaw_grid_coords - vector[5]
 
           var cos = Math.cos(offset * Math.PI / 180)
           var sin = Math.sin(offset * Math.PI / 180)
@@ -244,6 +330,9 @@ function getlines (array, imu_idx) {
 
           $("#transform").text(vector)
           $("#error").text(data.error)
+          $("#offset").text(offset)
+
+
 
           
           window.trackingctx = document.getElementById("tracking").getContext("2d")
@@ -256,6 +345,7 @@ function getlines (array, imu_idx) {
 
       }
     })
+    */
     dst.delete();
   }
 
