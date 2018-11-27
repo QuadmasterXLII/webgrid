@@ -432,75 +432,65 @@ function getlines (array, imu_idx) {
 
       } 
     }
+
+    var res2 = solve_minimum(vector, screen_points, world_points)
+    var vector
+    var error
+    if(res2.error < res.error){
+      vector = res2.v
+      error = res2.error
+    } else {
+      vector = res.v
+      error = res.error
+    }
+
     
-    cv.imshow('lines', dst);
-    var imu = events[imu_idx]
+      
+    var offset
+    if (!run_once) {
+      imu_yaw2grid_yaw_delta = vector[5] + events[imu_idx].alpha / 180 * Math.PI
+      console.log(imu_yaw2grid_yaw_delta)
+      run_once = true
+    } else {
+      var correct_yaw_grid_coords = -events[imu_idx].alpha / 180 * Math.PI + imu_yaw2grid_yaw_delta
+      offset = correct_yaw_grid_coords - vector[5]
 
-    var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma/ 180 * Math.PI, -imu.alpha/ 180 * Math.PI, (4/3) * 117]
-    res = solve_minimum(vector, screen_points, world_points)
-
-    $.ajax({
-      type: "POST",
-      url: "/linestotransform",
-      contentType: 'application/json',
-      data: JSON.stringify({
-        "imu" : events[imu_idx],
-        "lines" : lines_pruned,
-        "shape" : [window.webcam.webcamElement.videoWidth, window.webcam.webcamElement.videoHeight]
-      }),
-      success: (data) => {
-        var vector = data.vector
-        var v_rad = vector.slice()
-        v_rad[3] = v_rad[3] * Math.PI / 180
-        v_rad[4] = v_rad[4] * Math.PI / 180
-        v_rad[5] = v_rad[5] * Math.PI / 180
-        console.log(error(v_rad, screen_points, world_points))
-        
-        var offset
-        if (!run_once) {
-          imu_yaw2grid_yaw_delta = vector[5] + events[imu_idx].alpha
-          console.log(imu_yaw2grid_yaw_delta)
-          run_once = true
-        } else {
-          var correct_yaw_grid_coords = -events[imu_idx].alpha + imu_yaw2grid_yaw_delta
-          offset = correct_yaw_grid_coords - vector[5]
-
-          var cos = Math.cos(offset * Math.PI / 180)
-          var sin = Math.sin(offset * Math.PI / 180)
-          var x = mod1( cos * vector[0] + sin * vector[1])
-          var y = mod1(-sin * vector[0] + cos * vector[1])
-          vector[0] = x
-          vector[1] = y
-          vector[5] = correct_yaw_grid_coords
-        
+      var cos = Math.cos(offset)
+      var sin = Math.sin(offset)
+      var x = mod1( cos * vector[0] + sin * vector[1])
+      var y = mod1(-sin * vector[0] + cos * vector[1])
+      vector[0] = x
+      vector[1] = y
+      vector[5] = correct_yaw_grid_coords
+    
 
 
 
-        }
-        
-        if (data.error < 30){
+    }
+    
+    if (error < 30){
 
 
-          $("#transform").text(vector)
-          $("#error").text(data.error)
-          $("#offset").text(offset)
+      $("#transform").text(vector)
+      $("#error").text(error)
+      $("#offset").text(offset)
 
 
 
-          
-          window.trackingctx = document.getElementById("tracking").getContext("2d")
+      
+      window.trackingctx = document.getElementById("tracking").getContext("2d")
 
-          window.trackingctx.fillStyle = "rgba(255,255,255,1)"
-          window.trackingctx.fillRect(0, 0, 128, 128)
-          window.trackingctx.fillStyle = "rgba(255,0,0,1)"
-          window.trackingctx.fillRect(128 * x, 128 - 128 * y, 4, 4)
+      window.trackingctx.fillStyle = "rgba(255,255,255,1)"
+      window.trackingctx.fillRect(0, 0, 128, 128)
+      window.trackingctx.fillStyle = "rgba(255,0,0,1)"
+      window.trackingctx.fillRect(128 * x, 128 - 128 * y, 4, 4)
 
 
-          
-        }
+      
+    }
 
-      }
-    })
+      
+ 
     
     dst.delete();
   }
