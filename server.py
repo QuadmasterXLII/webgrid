@@ -1,8 +1,11 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from binascii import a2b_base64
+import registerFromImage
+import numpy as np
 app = Flask(__name__)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 @app.route("/")
 def hello():
@@ -23,5 +26,23 @@ def imageupload(name):
         out.close()
     return ''
 
+@app.route('/linestotransform', methods=["POST"])
+def linestotransform():
+    json = request.get_json()
+    #print(json)
+    imu = json["imu"]
+    if imu["alpha"]:
+        roll, pitch, yaw = [imu[n] * 3.1415 / 180 for n in ("gamma", "beta", "alpha")]
+    vertical_scale = json['shape'][1] / json['shape'][0]
+    error, vector = registerFromImage.registerFromLines(np.array([[l[:2]] for l in json['lines']]), 
+        attitude = imu["alpha"] and np.array([[roll], [yaw], [pitch]]), 
+        vertical_factor=vertical_scale, 
+        graph=False, 
+        focalLength = (4/3) * 117)
+
+
+    return jsonify({'error': error, "vector": [v for v in vector]})
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=443, ssl_context='adhoc')
+    app.run(host="0.0.0.0", port=443, ssl_context=('cert.pem', 'key.pem'))
