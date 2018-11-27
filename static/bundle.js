@@ -22872,6 +22872,133 @@ module.exports = CipherBase
 
 /***/ }),
 
+/***/ "./node_modules/clusters/clusters.js":
+/*!*******************************************!*\
+  !*** ./node_modules/clusters/clusters.js ***!
+  \*******************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = {
+
+  data: getterSetter([], function(arrayOfArrays) {
+    var n = arrayOfArrays[0].length;
+    return (arrayOfArrays.map(function(array) {
+      return array.length == n;
+    }).reduce(function(boolA, boolB) { return (boolA & boolB) }, true));
+  }),
+
+  clusters: function() {
+    var pointsAndCentroids = kmeans(this.data(), {k: this.k(), iterations: this.iterations() });
+    var points = pointsAndCentroids.points;
+    var centroids = pointsAndCentroids.centroids;
+
+    return centroids.map(function(centroid) {
+      return {
+        centroid: centroid.location(),
+        points: points.filter(function(point) { return point.label() == centroid.label() }).map(function(point) { return point.location() }),
+      };
+    });
+  },
+
+  k: getterSetter(undefined, function(value) { return ((value % 1 == 0) & (value > 0)) }),
+
+  iterations: getterSetter(Math.pow(10, 3), function(value) { return ((value % 1 == 0) & (value > 0)) }),
+
+};
+
+function kmeans(data, config) {
+  // default k
+  var k = config.k || Math.round(Math.sqrt(data.length / 2));
+  var iterations = config.iterations;
+
+  // initialize point objects with data
+  var points = data.map(function(vector) { return new Point(vector) });
+
+  // intialize centroids randomly
+  var centroids = [];
+  for (var i = 0; i < k; i++) {
+    centroids.push(new Centroid(points[i % points.length].location(), i));
+  };
+
+  // update labels and centroid locations until convergence
+  for (var iter = 0; iter < iterations; iter++) {
+    points.forEach(function(point) { point.updateLabel(centroids) });
+    centroids.forEach(function(centroid) { centroid.updateLocation(points) });
+  };
+
+  // return points and centroids
+  return {
+    points: points,
+    centroids: centroids
+  };
+
+};
+
+// objects
+function Point(location) {
+  var self = this;
+  this.location = getterSetter(location);
+  this.label = getterSetter();
+  this.updateLabel = function(centroids) {
+    var distancesSquared = centroids.map(function(centroid) {
+      return sumOfSquareDiffs(self.location(), centroid.location());
+    });
+    self.label(mindex(distancesSquared));
+  };
+};
+
+function Centroid(initialLocation, label) {
+  var self = this;
+  this.location = getterSetter(initialLocation);
+  this.label = getterSetter(label);
+  this.updateLocation = function(points) {
+    var pointsWithThisCentroid = points.filter(function(point) { return point.label() == self.label() });
+    if (pointsWithThisCentroid.length > 0) self.location(averageLocation(pointsWithThisCentroid));
+  };
+};
+
+// convenience functions
+function getterSetter(initialValue, validator) {
+  var thingToGetSet = initialValue;
+  var isValid = validator || function(val) { return true };
+  return function(newValue) {
+    if (typeof newValue === 'undefined') return thingToGetSet;
+    if (isValid(newValue)) thingToGetSet = newValue;
+  };
+};
+
+function sumOfSquareDiffs(oneVector, anotherVector) {
+  var squareDiffs = oneVector.map(function(component, i) {
+    return Math.pow(component - anotherVector[i], 2);
+  });
+  return squareDiffs.reduce(function(a, b) { return a + b }, 0);
+};
+
+function mindex(array) {
+  var min = array.reduce(function(a, b) {
+    return Math.min(a, b);
+  });
+  return array.indexOf(min);
+};
+
+function sumVectors(a, b) {
+  return a.map(function(val, i) { return val + b[i] });
+};
+
+function averageLocation(points) {
+  var zeroVector = points[0].location().map(function() { return 0 });
+  var locations = points.map(function(point) { return point.location() });
+  var vectorSum = locations.reduce(function(a, b) { return sumVectors(a, b) }, zeroVector);
+  return vectorSum.map(function(val) { return val / points.length });
+};
+
+
+/***/ }),
+
 /***/ "./node_modules/core-util-is/lib/util.js":
 /*!***********************************************!*\
   !*** ./node_modules/core-util-is/lib/util.js ***!
@@ -28903,6 +29030,440 @@ function EVP_BytesToKey (password, salt, keyBits, ivLen) {
 
 module.exports = EVP_BytesToKey
 
+
+/***/ }),
+
+/***/ "./node_modules/fmin/build/fmin.js":
+/*!*****************************************!*\
+  !*** ./node_modules/fmin/build/fmin.js ***!
+  \*****************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+(function (global, factory) {
+     true ? factory(exports) :
+    undefined;
+}(this, function (exports) { 'use strict';
+
+    /** finds the zeros of a function, given two starting points (which must
+     * have opposite signs */
+    function bisect(f, a, b, parameters) {
+        parameters = parameters || {};
+        var maxIterations = parameters.maxIterations || 100,
+            tolerance = parameters.tolerance || 1e-10,
+            fA = f(a),
+            fB = f(b),
+            delta = b - a;
+
+        if (fA * fB > 0) {
+            throw "Initial bisect points must have opposite signs";
+        }
+
+        if (fA === 0) return a;
+        if (fB === 0) return b;
+
+        for (var i = 0; i < maxIterations; ++i) {
+            delta /= 2;
+            var mid = a + delta,
+                fMid = f(mid);
+
+            if (fMid * fA >= 0) {
+                a = mid;
+            }
+
+            if ((Math.abs(delta) < tolerance) || (fMid === 0)) {
+                return mid;
+            }
+        }
+        return a + delta;
+    }
+
+    // need some basic operations on vectors, rather than adding a dependency,
+    // just define here
+    function zeros(x) { var r = new Array(x); for (var i = 0; i < x; ++i) { r[i] = 0; } return r; }
+    function zerosM(x,y) { return zeros(x).map(function() { return zeros(y); }); }
+
+    function dot(a, b) {
+        var ret = 0;
+        for (var i = 0; i < a.length; ++i) {
+            ret += a[i] * b[i];
+        }
+        return ret;
+    }
+
+    function norm2(a)  {
+        return Math.sqrt(dot(a, a));
+    }
+
+    function scale(ret, value, c) {
+        for (var i = 0; i < value.length; ++i) {
+            ret[i] = value[i] * c;
+        }
+    }
+
+    function weightedSum(ret, w1, v1, w2, v2) {
+        for (var j = 0; j < ret.length; ++j) {
+            ret[j] = w1 * v1[j] + w2 * v2[j];
+        }
+    }
+
+    /** minimizes a function using the downhill simplex method */
+    function nelderMead(f, x0, parameters) {
+        parameters = parameters || {};
+
+        var maxIterations = parameters.maxIterations || x0.length * 200,
+            nonZeroDelta = parameters.nonZeroDelta || 1.05,
+            zeroDelta = parameters.zeroDelta || 0.001,
+            minErrorDelta = parameters.minErrorDelta || 1e-6,
+            minTolerance = parameters.minErrorDelta || 1e-5,
+            rho = (parameters.rho !== undefined) ? parameters.rho : 1,
+            chi = (parameters.chi !== undefined) ? parameters.chi : 2,
+            psi = (parameters.psi !== undefined) ? parameters.psi : -0.5,
+            sigma = (parameters.sigma !== undefined) ? parameters.sigma : 0.5,
+            maxDiff;
+
+        // initialize simplex.
+        var N = x0.length,
+            simplex = new Array(N + 1);
+        simplex[0] = x0;
+        simplex[0].fx = f(x0);
+        simplex[0].id = 0;
+        for (var i = 0; i < N; ++i) {
+            var point = x0.slice();
+            point[i] = point[i] ? point[i] * nonZeroDelta : zeroDelta;
+            simplex[i+1] = point;
+            simplex[i+1].fx = f(point);
+            simplex[i+1].id = i+1;
+        }
+
+        function updateSimplex(value) {
+            for (var i = 0; i < value.length; i++) {
+                simplex[N][i] = value[i];
+            }
+            simplex[N].fx = value.fx;
+        }
+
+        var sortOrder = function(a, b) { return a.fx - b.fx; };
+
+        var centroid = x0.slice(),
+            reflected = x0.slice(),
+            contracted = x0.slice(),
+            expanded = x0.slice();
+
+        for (var iteration = 0; iteration < maxIterations; ++iteration) {
+            simplex.sort(sortOrder);
+
+            if (parameters.history) {
+                // copy the simplex (since later iterations will mutate) and
+                // sort it to have a consistent order between iterations
+                var sortedSimplex = simplex.map(function (x) {
+                    var state = x.slice();
+                    state.fx = x.fx;
+                    state.id = x.id;
+                    return state;
+                });
+                sortedSimplex.sort(function(a,b) { return a.id - b.id; });
+
+                parameters.history.push({x: simplex[0].slice(),
+                                         fx: simplex[0].fx,
+                                         simplex: sortedSimplex});
+            }
+
+            maxDiff = 0;
+            for (i = 0; i < N; ++i) {
+                maxDiff = Math.max(maxDiff, Math.abs(simplex[0][i] - simplex[1][i]));
+            }
+
+            if ((Math.abs(simplex[0].fx - simplex[N].fx) < minErrorDelta) &&
+                (maxDiff < minTolerance)) {
+                break;
+            }
+
+            // compute the centroid of all but the worst point in the simplex
+            for (i = 0; i < N; ++i) {
+                centroid[i] = 0;
+                for (var j = 0; j < N; ++j) {
+                    centroid[i] += simplex[j][i];
+                }
+                centroid[i] /= N;
+            }
+
+            // reflect the worst point past the centroid  and compute loss at reflected
+            // point
+            var worst = simplex[N];
+            weightedSum(reflected, 1+rho, centroid, -rho, worst);
+            reflected.fx = f(reflected);
+
+            // if the reflected point is the best seen, then possibly expand
+            if (reflected.fx < simplex[0].fx) {
+                weightedSum(expanded, 1+chi, centroid, -chi, worst);
+                expanded.fx = f(expanded);
+                if (expanded.fx < reflected.fx) {
+                    updateSimplex(expanded);
+                }  else {
+                    updateSimplex(reflected);
+                }
+            }
+
+            // if the reflected point is worse than the second worst, we need to
+            // contract
+            else if (reflected.fx >= simplex[N-1].fx) {
+                var shouldReduce = false;
+
+                if (reflected.fx > worst.fx) {
+                    // do an inside contraction
+                    weightedSum(contracted, 1+psi, centroid, -psi, worst);
+                    contracted.fx = f(contracted);
+                    if (contracted.fx < worst.fx) {
+                        updateSimplex(contracted);
+                    } else {
+                        shouldReduce = true;
+                    }
+                } else {
+                    // do an outside contraction
+                    weightedSum(contracted, 1-psi * rho, centroid, psi*rho, worst);
+                    contracted.fx = f(contracted);
+                    if (contracted.fx < reflected.fx) {
+                        updateSimplex(contracted);
+                    } else {
+                        shouldReduce = true;
+                    }
+                }
+
+                if (shouldReduce) {
+                    // if we don't contract here, we're done
+                    if (sigma >= 1) break;
+
+                    // do a reduction
+                    for (i = 1; i < simplex.length; ++i) {
+                        weightedSum(simplex[i], 1 - sigma, simplex[0], sigma, simplex[i]);
+                        simplex[i].fx = f(simplex[i]);
+                    }
+                }
+            } else {
+                updateSimplex(reflected);
+            }
+        }
+
+        simplex.sort(sortOrder);
+        return {fx : simplex[0].fx,
+                x : simplex[0]};
+    }
+
+    /// searches along line 'pk' for a point that satifies the wolfe conditions
+    /// See 'Numerical Optimization' by Nocedal and Wright p59-60
+    /// f : objective function
+    /// pk : search direction
+    /// current: object containing current gradient/loss
+    /// next: output: contains next gradient/loss
+    /// returns a: step size taken
+    function wolfeLineSearch(f, pk, current, next, a, c1, c2) {
+        var phi0 = current.fx, phiPrime0 = dot(current.fxprime, pk),
+            phi = phi0, phi_old = phi0,
+            phiPrime = phiPrime0,
+            a0 = 0;
+
+        a = a || 1;
+        c1 = c1 || 1e-6;
+        c2 = c2 || 0.1;
+
+        function zoom(a_lo, a_high, phi_lo) {
+            for (var iteration = 0; iteration < 16; ++iteration) {
+                a = (a_lo + a_high)/2;
+                weightedSum(next.x, 1.0, current.x, a, pk);
+                phi = next.fx = f(next.x, next.fxprime);
+                phiPrime = dot(next.fxprime, pk);
+
+                if ((phi > (phi0 + c1 * a * phiPrime0)) ||
+                    (phi >= phi_lo)) {
+                    a_high = a;
+
+                } else  {
+                    if (Math.abs(phiPrime) <= -c2 * phiPrime0) {
+                        return a;
+                    }
+
+                    if (phiPrime * (a_high - a_lo) >=0) {
+                        a_high = a_lo;
+                    }
+
+                    a_lo = a;
+                    phi_lo = phi;
+                }
+            }
+
+            return 0;
+        }
+
+        for (var iteration = 0; iteration < 10; ++iteration) {
+            weightedSum(next.x, 1.0, current.x, a, pk);
+            phi = next.fx = f(next.x, next.fxprime);
+            phiPrime = dot(next.fxprime, pk);
+            if ((phi > (phi0 + c1 * a * phiPrime0)) ||
+                (iteration && (phi >= phi_old))) {
+                return zoom(a0, a, phi_old);
+            }
+
+            if (Math.abs(phiPrime) <= -c2 * phiPrime0) {
+                return a;
+            }
+
+            if (phiPrime >= 0 ) {
+                return zoom(a, a0, phi);
+            }
+
+            phi_old = phi;
+            a0 = a;
+            a *= 2;
+        }
+
+        return a;
+    }
+
+    function conjugateGradient(f, initial, params) {
+        // allocate all memory up front here, keep out of the loop for perfomance
+        // reasons
+        var current = {x: initial.slice(), fx: 0, fxprime: initial.slice()},
+            next = {x: initial.slice(), fx: 0, fxprime: initial.slice()},
+            yk = initial.slice(),
+            pk, temp,
+            a = 1,
+            maxIterations;
+
+        params = params || {};
+        maxIterations = params.maxIterations || initial.length * 20;
+
+        current.fx = f(current.x, current.fxprime);
+        pk = current.fxprime.slice();
+        scale(pk, current.fxprime,-1);
+
+        for (var i = 0; i < maxIterations; ++i) {
+            a = wolfeLineSearch(f, pk, current, next, a);
+
+            // todo: history in wrong spot?
+            if (params.history) {
+                params.history.push({x: current.x.slice(),
+                                     fx: current.fx,
+                                     fxprime: current.fxprime.slice(),
+                                     alpha: a});
+            }
+
+            if (!a) {
+                // faiiled to find point that satifies wolfe conditions.
+                // reset direction for next iteration
+                scale(pk, current.fxprime, -1);
+
+            } else {
+                // update direction using Polak–Ribiere CG method
+                weightedSum(yk, 1, next.fxprime, -1, current.fxprime);
+
+                var delta_k = dot(current.fxprime, current.fxprime),
+                    beta_k = Math.max(0, dot(yk, next.fxprime) / delta_k);
+
+                weightedSum(pk, beta_k, pk, -1, next.fxprime);
+
+                temp = current;
+                current = next;
+                next = temp;
+            }
+
+            if (norm2(current.fxprime) <= 1e-5) {
+                break;
+            }
+        }
+
+        if (params.history) {
+            params.history.push({x: current.x.slice(),
+                                 fx: current.fx,
+                                 fxprime: current.fxprime.slice(),
+                                 alpha: a});
+        }
+
+        return current;
+    }
+
+    function gradientDescent(f, initial, params) {
+        params = params || {};
+        var maxIterations = params.maxIterations || initial.length * 100,
+            learnRate = params.learnRate || 0.001,
+            current = {x: initial.slice(), fx: 0, fxprime: initial.slice()};
+
+        for (var i = 0; i < maxIterations; ++i) {
+            current.fx = f(current.x, current.fxprime);
+            if (params.history) {
+                params.history.push({x: current.x.slice(),
+                                     fx: current.fx,
+                                     fxprime: current.fxprime.slice()});
+            }
+
+            weightedSum(current.x, 1, current.x, -learnRate, current.fxprime);
+            if (norm2(current.fxprime) <= 1e-5) {
+                break;
+            }
+        }
+
+        return current;
+    }
+
+    function gradientDescentLineSearch(f, initial, params) {
+        params = params || {};
+        var current = {x: initial.slice(), fx: 0, fxprime: initial.slice()},
+            next = {x: initial.slice(), fx: 0, fxprime: initial.slice()},
+            maxIterations = params.maxIterations || initial.length * 100,
+            learnRate = params.learnRate || 1,
+            pk = initial.slice(),
+            c1 = params.c1 || 1e-3,
+            c2 = params.c2 || 0.1,
+            temp,
+            functionCalls = [];
+
+        if (params.history) {
+            // wrap the function call to track linesearch samples
+            var inner = f;
+            f = function(x, fxprime) {
+                functionCalls.push(x.slice());
+                return inner(x, fxprime);
+            };
+        }
+
+        current.fx = f(current.x, current.fxprime);
+        for (var i = 0; i < maxIterations; ++i) {
+            scale(pk, current.fxprime, -1);
+            learnRate = wolfeLineSearch(f, pk, current, next, learnRate, c1, c2);
+
+            if (params.history) {
+                params.history.push({x: current.x.slice(),
+                                     fx: current.fx,
+                                     fxprime: current.fxprime.slice(),
+                                     functionCalls: functionCalls,
+                                     learnRate: learnRate,
+                                     alpha: learnRate});
+                functionCalls = [];
+            }
+
+
+            temp = current;
+            current = next;
+            next = temp;
+
+            if ((learnRate === 0) || (norm2(current.fxprime) < 1e-5)) break;
+        }
+
+        return current;
+    }
+
+    exports.bisect = bisect;
+    exports.nelderMead = nelderMead;
+    exports.conjugateGradient = conjugateGradient;
+    exports.gradientDescent = gradientDescent;
+    exports.gradientDescentLineSearch = gradientDescentLineSearch;
+    exports.zeros = zeros;
+    exports.zerosM = zerosM;
+    exports.norm2 = norm2;
+    exports.weightedSum = weightedSum;
+    exports.scale = scale;
+
+}));
 
 /***/ }),
 
@@ -47392,19 +47953,24 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+//const GMM = require("gaussian-mixture-model")
+var clustermaker = __webpack_require__(/*! clusters */ "./node_modules/clusters/clusters.js");
+var fmin = __webpack_require__(/*! fmin */ "./node_modules/fmin/build/fmin.js");
+
 function log(l) {
   // $('#log').append(l + '<br>')
   console.log(l);
 }
 var running = false;
 async function runmodel() {
-  log('getting image');
+  //log('getting image')
+  var imu_idx = window.events.length - 1;
   var output = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["tidy"](() => {
     var image = window.webcam.capture();
     window.image = image;
     // log("image " + image.shape);
 
-    log('running model');
+    //log('running model')
     var output = window.model.predict(image);
 
     output = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["reshape"](output, [128, 128, 2]);
@@ -47415,12 +47981,12 @@ async function runmodel() {
 
     return output.add(-0.5).mul(3000).clipByValue(0, 1);
   });
-  _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["toPixels"](output, document.getElementById('segmentation'));
+  //tf.toPixels(output, document.getElementById('segmentation'))
   //log('done')
 
   window.output_array = await output.slice([0, 0, 1], [128, 128, 1]).data();
 
-  getlines(window.output_array);
+  getlines(window.output_array, imu_idx);
   //running = false;
   if (running) {
     setTimeout(runmodel, 30);
@@ -47433,32 +47999,216 @@ function intersection(line1, line2) {
   //
   //Returns closest integer pixel locations.
   //See https://stackoverflow.com/a/383527/5087436
-  /*
-      rho1, theta1 = line1[0]
-      rho2, theta2 = line2[0]
-      A = np.array([
-          [np.cos(theta1), np.sin(theta1)],
-          [np.cos(theta2), np.sin(theta2)]
-      ])
-      b = np.array([[rho1], [rho2]])
-      x0, y0 = np.linalg.solve(A, b)
-      
-      return [[x0, y0]]*/
+
+  let rho1 = line1[0];
+  let theta1 = line1[1];
+  let rho2 = line2[0];
+  let theta2 = line2[1];
+  let A = cv.matFromArray(2, 2, cv.CV_32F, [Math.cos(theta1), Math.sin(theta1), Math.cos(theta2), Math.sin(theta2)]);
+  let b = cv.matFromArray(2, 1, cv.CV_32F, [rho1, rho2]);
+  let res = new cv.Mat();
+  cv.gemm(A.inv(cv.DECOMP_LU), b, 1, cv.matFromArray(2, 1, cv.CV_32F, [0, 0]), 0, res, 0);
+
+  return res;
 }
-function drawLines(lines, mat) {
+function drawLines(lines, mat, color) {
   for (let i = 0; i < lines.rows; ++i) {
-    let rho = lines.data32F[i * 2];
-    let theta = lines.data32F[i * 2 + 1];
+    let rho = lines.data32F[i * 3];
+    let theta = lines.data32F[i * 3 + 1];
     let a = Math.cos(theta);
     let b = Math.sin(theta);
     let x0 = a * rho;
     let y0 = b * rho;
     let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
     let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
-    cv.line(mat, startPoint, endPoint, [125, 0, 0, 255]);
+    cv.line(mat, startPoint, endPoint, color);
   }
 }
-function getlines(array) {
+function drawLinesJ(lines, mat, color) {
+  for (let i = 0; i < lines.length; ++i) {
+    let rho = lines[i][0];
+    let theta = lines[i][1];
+    let a = Math.cos(theta);
+    let b = Math.sin(theta);
+    let x0 = a * rho;
+    let y0 = b * rho;
+    let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+    let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+    cv.line(mat, startPoint, endPoint, color);
+  }
+}
+function mat32FToArray(mat) {
+  var res = [];
+  for (let i = 0; i < mat.rows; ++i) {
+    res.push([]);
+    for (let j = 0; j < mat.cols; ++j) {
+      res[i].push(mat.data32F[i * mat.cols + j]);
+    }
+  }
+  return res;
+}
+
+var run_once = false;
+let error_scale = 100;
+function error(vector, screen_points, world_points) {
+
+  var sin = Math.sin;
+  var cos = Math.cos;
+  var pi = Math.PI;
+  var height = 128;
+  var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight;
+  //console.log(width, height)
+
+  var x = vector[0];
+  var y = vector[1];
+  var z = vector[2];
+  var pitch = vector[3];
+  var roll = vector[4];
+  var yaw = vector[5];
+  var focallength = vector[6];
+  var error = 0;
+  for (var i = 0; i < screen_points.length; ++i) {
+    var screen_point = screen_points[i];
+    var world_point = world_points[i];
+    var screen_x = screen_point[0];
+    var screen_y = screen_point[1];
+    var world_x = world_point[0];
+    var world_y = world_point[1];
+    var world_z = world_point[2];
+
+    var e = (-focallength * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) + height / 2 - screen_x) ** 2 + (-focallength * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - screen_y + width / 2) ** 2;
+    //console.log(world_x, world_y)
+    //console.log(screen_x, screen_y)
+    error += e;
+  }
+  return error / error_scale;
+}
+function gradient(vector, screen_points, world_points) {
+
+  var sin = Math.sin;
+  var cos = Math.cos;
+  var pi = Math.PI;
+  var height = 128;
+  var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight;
+  //console.log(width, height)
+
+  var x = vector[0];
+  var y = vector[1];
+  var z = vector[2];
+  var pitch = vector[3];
+  var roll = vector[4];
+  var yaw = vector[5];
+  var focallength = vector[6];
+  var dx = 0,
+      dy = 0,
+      dz = 0,
+      dyaw = 0;
+  for (var i = 0; i < screen_points.length; ++i) {
+    var screen_point = screen_points[i];
+    var world_point = world_points[i];
+    var screen_x = screen_point[0];
+    var screen_y = screen_point[1];
+    var world_x = world_point[0];
+    var world_y = world_point[1];
+    var world_z = world_point[2];
+
+    dx += (-2 * focallength * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - 2 * focallength * (-sin(pitch) * sin(yaw) * cos(roll) + sin(roll) * cos(yaw)) * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2) * (-focallength * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) + height / 2 - screen_x) + (-2 * focallength * (-sin(pitch) * sin(yaw) * cos(roll) + sin(roll) * cos(yaw)) * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2 - 2 * focallength * sin(yaw) * cos(pitch) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll))) * (-focallength * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - screen_y + width / 2);
+    dy += (-2 * focallength * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - 2 * focallength * (-sin(pitch) * cos(roll) * cos(yaw) - sin(roll) * sin(yaw)) * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2) * (-focallength * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) + height / 2 - screen_x) + (-2 * focallength * (-sin(pitch) * cos(roll) * cos(yaw) - sin(roll) * sin(yaw)) * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2 - 2 * focallength * cos(pitch) * cos(yaw) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll))) * (-focallength * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - screen_y + width / 2);
+    dz += (2 * focallength * sin(pitch) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) + 2 * focallength * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) * cos(pitch) * cos(roll) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2) * (-focallength * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - screen_y + width / 2) + (2 * focallength * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) * cos(pitch) * cos(roll) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2 - 2 * focallength * sin(roll) * cos(pitch) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll))) * (-focallength * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) + height / 2 - screen_x);
+
+    dyaw += (-2 * focallength * (world_x * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_y * (-sin(pitch) * sin(roll) * sin(yaw) - cos(roll) * cos(yaw)) + x * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + y * (-sin(pitch) * sin(roll) * sin(yaw) - cos(roll) * cos(yaw))) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - 2 * focallength * (-world_x * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) - world_y * (-sin(pitch) * sin(yaw) * cos(roll) + sin(roll) * cos(yaw)) - x * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) - y * (-sin(pitch) * sin(yaw) * cos(roll) + sin(roll) * cos(yaw))) * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2) * (-focallength * (world_x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + world_y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + world_z * sin(roll) * cos(pitch) + x * (sin(pitch) * sin(roll) * sin(yaw) + cos(roll) * cos(yaw)) + y * (sin(pitch) * sin(roll) * cos(yaw) - sin(yaw) * cos(roll)) + z * sin(roll) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) + height / 2 - screen_x) + (-2 * focallength * (-world_x * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) - world_y * (-sin(pitch) * sin(yaw) * cos(roll) + sin(roll) * cos(yaw)) - x * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) - y * (-sin(pitch) * sin(yaw) * cos(roll) + sin(roll) * cos(yaw))) * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) ** 2 - 2 * focallength * (world_x * cos(pitch) * cos(yaw) - world_y * sin(yaw) * cos(pitch) + x * cos(pitch) * cos(yaw) - y * sin(yaw) * cos(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll))) * (-focallength * (world_x * sin(yaw) * cos(pitch) + world_y * cos(pitch) * cos(yaw) - world_z * sin(pitch) + x * sin(yaw) * cos(pitch) + y * cos(pitch) * cos(yaw) - z * sin(pitch)) / (world_x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + world_y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + world_z * cos(pitch) * cos(roll) + x * (sin(pitch) * sin(yaw) * cos(roll) - sin(roll) * cos(yaw)) + y * (sin(pitch) * cos(roll) * cos(yaw) + sin(roll) * sin(yaw)) + z * cos(pitch) * cos(roll)) - screen_y + width / 2);
+  }
+  return [dx / error_scale, dy / error_scale, dz / error_scale, dyaw / error_scale];
+}
+
+function make_error_params(vector, screen_points, world_points) {
+  vector = vector.slice();
+  function error_restricted(vector2, fprime) {
+    [[0, 0], [1, 1], [2, 2], [3, 5]].forEach(j => {
+      vector[j[1]] = vector2[j[0]];
+    });
+    var fp = gradient(vector, screen_points, world_points);
+    fprime = fprime || [0, 0, 0, 0];
+    for (var j = 0; j < 4; j++) {
+      fprime[j] = fp[j];
+    }
+    return error(vector, screen_points, world_points);
+  }
+
+  return error_restricted;
+}
+
+function solve_minimum(vector, screen_points, world_points) {
+  var real_solution = { fx: 9999999 };
+  [0].forEach(yaw => {
+    vector = vector.slice();
+    var loss = make_error_params(vector, screen_points, world_points);
+    var solution = fmin.conjugateGradient(loss, [0, 0, -2.5, 0], { maxIterations: 1000 }); // vector[0], vector[1], vector[2], vector[5]])
+    if (real_solution.fx > solution.fx) {
+      real_solution = solution;
+    }
+  });
+  console.log(real_solution);
+  [[0, 0], [1, 1], [2, 2], [3, 5]].forEach(j => {
+    vector[j[1]] = real_solution.x[j[0]];
+  });
+  return { v: vector, error: real_solution.fx };
+}
+function sortlines(lines, reference) {
+  function value(line) {
+    return intersection(line, reference[0]).data32F[0];
+  }
+  return lines.sort((a, b) => value(a) - value(b));
+}
+
+function mod1(x) {
+  return (x % 1 + 1) % 1;
+}
+function distance(p1, p2) {
+  return Math.sqrt((p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1]));
+}
+function embed(l) {
+  return [Math.sin(2 * l[1]), Math.cos(2 * l[1])];
+}
+function split(lines) {
+  //window.trackingctx = document.getElementById("tracking").getContext("2d")
+
+
+  clustermaker.k(2);
+  clustermaker.iterations(209);
+  var data = [];
+  lines.forEach(l => {
+    data.push(embed(l));
+    //the following is horrible, but avoids singularities in the GMM code I'm using
+    /*gmm.addPoint(embed(l))
+    gmm.addPoint([embed(l)[0], embed(l)[1] + .03])
+    gmm.addPoint([embed(l)[0] + .03, embed(l)[1]])*/
+  });
+  clustermaker.data(data);
+  var res = clustermaker.clusters();
+  //gmm.runEM(7)
+  var lines1 = [];
+  var lines2 = [];
+  //window.trackingctx.fillStyle = "rgba(255,255,255,1)"
+  //        window.trackingctx.fillRect(0, 0, 128, 128)
+  lines.forEach(l => {
+    //if(gmm.predictNormalize(embed(l))[0] > .5){
+    if (distance(embed(l), res[0].centroid) < distance(embed(l), res[1].centroid)) {
+      lines1.push(l);
+
+      //window.trackingctx.fillStyle = "rgba(255,0,0,1)"
+      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+    } else {
+      lines2.push(l);
+      //window.trackingctx.fillStyle = "rgba(0,255,0,1)"
+      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+    }
+  });
+  return [lines1, lines2];
+}
+var imu_yaw2grid_yaw_delta;
+window.prune_strat = "mostvotes";
+function getlines(array, imu_idx) {
   window.mat = cv.matFromArray(128, 128, cv.CV_32F, array);
   var gr = new cv.Mat();
   mat.convertTo(mat, cv.CV_8UC1);
@@ -47482,7 +48232,7 @@ function getlines(array) {
   let lines = new cv.Mat();
 
   cv.HoughLines(skele, lines, 1, Math.PI / 180, 27, 0, 0, 0, Math.PI);
-  drawLines(lines, dst);
+  drawLines(lines, dst, [76, 0, 0, 255]);
   if (lines.rows < 2) {
     return;
   }
@@ -47491,11 +48241,11 @@ function getlines(array) {
   for (let i = 0; i < lines.rows; ++i) {
     lineDistMat.push([]);
     for (let j = 0; j < lines.rows; ++j) {
-      var rho1 = lines.data32F[i * 2];
-      var theta1 = lines.data32F[i * 2 + 1];
+      var rho1 = lines.data32F[i * 3];
+      var theta1 = lines.data32F[i * 3 + 1];
 
-      let rho2 = lines.data32F[j * 2];
-      let theta2 = lines.data32F[j * 2 + 1];
+      let rho2 = lines.data32F[j * 3];
+      let theta2 = lines.data32F[j * 3 + 1];
 
       let distance1 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2));
       rho1 = rho1 * -1;
@@ -47507,25 +48257,156 @@ function getlines(array) {
   }
   //console.table(lineDistMat)
   var cluster_result = affinity_propagation__WEBPACK_IMPORTED_MODULE_3__["getClusters"](lineDistMat, { preference: window.preference, damping: .5 });
-  //console.log(cluster_result)
+  console.log(cluster_result);
   //console.table(lineDistMat)
-  for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-    let i = cluster_result.exemplars[j];
-    console.log(i);
-    let rho = lines.data32F[i * 2];
-    let theta = lines.data32F[i * 2 + 1];
-    let a = Math.cos(theta);
-    let b = Math.sin(theta);
-    let x0 = a * rho;
-    let y0 = b * rho;
-    let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
-    let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
-    cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
-  }
 
-  cv.imshow('lines', dst);
-  dst.delete();
+  if (cluster_result.converged) {
+    var lines_pruned = [];
+    if (window.prune_strat == "mostvotes") {
+      var cluster_exemplar_lookup = [];
+
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+        cluster_exemplar_lookup[cluster_result.exemplars[j]] = j;
+        lines_pruned.push([0, 0, 0]);
+      }
+
+      for (let i = 0; i < lines.rows; ++i) {
+        var cluster_idx = cluster_exemplar_lookup[cluster_result.clusters[i]];
+
+        if (lines.data32F[i * 3 + 2] > lines_pruned[cluster_idx][2]) {
+          let rho = lines.data32F[i * 3];
+          let theta = lines.data32F[i * 3 + 1];
+          let score = lines.data32F[i * 3 + 2];
+
+          lines_pruned[cluster_idx] = [rho, theta, score];
+        }
+      }
+
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+
+        let rho = lines_pruned[j][0];
+        let theta = lines_pruned[j][1];
+        let a = Math.cos(theta);
+        let b = Math.sin(theta);
+        let x0 = a * rho;
+        let y0 = b * rho;
+        let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+        let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+      }
+    } else {
+
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+        let i = cluster_result.exemplars[j];
+        let rho = lines.data32F[i * 3];
+        let theta = lines.data32F[i * 3 + 1];
+        lines_pruned.push([rho, theta]);
+        let a = Math.cos(theta);
+        let b = Math.sin(theta);
+        let x0 = a * rho;
+        let y0 = b * rho;
+        let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+        let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+      }
+    }
+
+    /*let i1 = mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
+    let i2 = mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
+    console.log(i1)
+    cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
+
+    var split_lines = split(lines_pruned);
+
+    drawLinesJ(split_lines[0], dst, [0, 255, 0, 255]);
+    drawLinesJ(split_lines[1], dst, [255, 0, 255, 255]);
+
+    split_lines[0] = sortlines(split_lines[0], split_lines[1]);
+    split_lines[1] = sortlines(split_lines[1], split_lines[0]);
+
+    console.log(split_lines);
+
+    var world_points = [];
+    var screen_points = [];
+
+    for (var i = 0; i < split_lines[0].length; ++i) {
+      var l1 = split_lines[0][i];
+      for (var j = 0; j < split_lines[1].length; ++j) {
+        var l2 = split_lines[1][j];
+        var x = intersection(l1, l2);
+        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight];
+        screen_points.push(x);
+        world_points.push([i - 1, j - 1, 0]);
+      }
+    }
+
+    cv.imshow('lines', dst);
+    var imu = events[imu_idx];
+
+    var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma / 180 * Math.PI, -imu.alpha / 180 * Math.PI, 4 / 3 * 117];
+    var res = solve_minimum(vector, screen_points, world_points);
+
+    world_points = [];
+    screen_points = [];
+
+    for (var i = 0; i < split_lines[1].length; ++i) {
+      var l1 = split_lines[1][i];
+      for (var j = 0; j < split_lines[0].length; ++j) {
+        var l2 = split_lines[0][j];
+        var x = intersection(l1, l2);
+        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight];
+        screen_points.push(x);
+        world_points.push([i - 1, j - 1, 0]);
+      }
+    }
+
+    var res2 = solve_minimum(vector, screen_points, world_points);
+    var vector;
+    var error;
+    if (res2.error < res.error) {
+      vector = res2.v;
+      error = res2.error;
+    } else {
+      vector = res.v;
+      error = res.error;
+    }
+
+    var offset;
+    if (!run_once) {
+      imu_yaw2grid_yaw_delta = vector[5] + events[imu_idx].alpha / 180 * Math.PI;
+      console.log(imu_yaw2grid_yaw_delta);
+      run_once = true;
+    } else {
+      var correct_yaw_grid_coords = -events[imu_idx].alpha / 180 * Math.PI + imu_yaw2grid_yaw_delta;
+      offset = correct_yaw_grid_coords - vector[5];
+
+      var cos = Math.cos(offset);
+      var sin = Math.sin(offset);
+      var x = mod1(cos * vector[0] + sin * vector[1]);
+      var y = mod1(-sin * vector[0] + cos * vector[1]);
+      vector[0] = x;
+      vector[1] = y;
+      vector[5] = correct_yaw_grid_coords;
+    }
+
+    if (error < 30) {
+
+      jquery__WEBPACK_IMPORTED_MODULE_2__("#transform").text(vector);
+      jquery__WEBPACK_IMPORTED_MODULE_2__("#error").text(error);
+      jquery__WEBPACK_IMPORTED_MODULE_2__("#offset").text(offset);
+
+      window.trackingctx = document.getElementById("tracking").getContext("2d");
+
+      window.trackingctx.fillStyle = "rgba(255,255,255,1)";
+      window.trackingctx.fillRect(0, 0, 128, 128);
+      window.trackingctx.fillStyle = "rgba(255,0,0,1)";
+      window.trackingctx.fillRect(128 * x, 128 - 128 * y, 4, 4);
+    }
+
+    dst.delete();
+  }
 }
+
 window.preference = -.6;
 var sessionid = Math.round(90000 * Math.random());
 var recording = false;
@@ -47535,7 +48416,7 @@ function submitPhoto() {
   context.drawImage(window.webcam.webcamElement, 0, 0, 512, 512);
   jquery__WEBPACK_IMPORTED_MODULE_2__["ajax"]({
     type: "POST",
-    url: "/imageupload/" + (Math.random() + sessionid),
+    url: "http://ec2-18-188-175-17.us-east-2.compute.amazonaws.com:4000/imageupload/" + (Math.random() + sessionid),
     data: {
       image: document.getElementById("cameraframe").toDataURL('image/png')
     }
