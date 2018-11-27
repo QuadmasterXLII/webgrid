@@ -106,7 +106,65 @@ function mat32FToArray(mat) {
 }
 
 var run_once = false
-var 
+
+function error(vector, screen_points, world_points){
+
+    var sin = Math.sin
+    var cos = Math.cos
+    var pi = Math.PI
+    var height = 128
+    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
+    console.log(width, height)
+
+    var x = vector[0]
+    var y = vector[1]
+    var z = vector[2]
+    var pitch =vector[3]
+    var roll = vector[4]
+    var yaw = vector[5]
+    var focallength = vector[6]
+    var error = 0
+    for(var i = 0; i < screen_points.length; ++i) {
+      var screen_point = screen_points[i]
+      var world_point = world_points[i]
+      var screen_x = screen_point[0]
+      var screen_y = screen_point[1]
+      var world_x= world_point[0]
+      var world_y = world_point[1]
+      var world_z = world_point[2]
+    
+      var e = (((2*focallength*(world_x*(sin(pi*pitch/180)*sin(pi*roll/180)*sin(pi*yaw/180) 
+          + cos(pi*roll/180)*cos(pi*yaw/180)) + world_y*(sin(pi*pitch/180)*sin(pi*roll/180)*cos(pi*yaw/180) 
+          - sin(pi*yaw/180)*cos(pi*roll/180)) + world_z*sin(pi*roll/180)*cos(pi*pitch/180) 
+          + x*(sin(pi*pitch/180)*sin(pi*roll/180)*sin(pi*yaw/180) + cos(pi*roll/180)*cos(pi*yaw/180)) 
+          + y*(sin(pi*pitch/180)*sin(pi*roll/180)*cos(pi*yaw/180) - sin(pi*yaw/180)*cos(pi*roll/180)) 
+          + z*sin(pi*roll/180)*cos(pi*pitch/180)) 
+      + (-height + 2*screen_x)*(world_x*(sin(pi*pitch/180)*sin(pi*yaw/180)*cos(pi*roll/180) 
+          - sin(pi*roll/180)*cos(pi*yaw/180)) + world_y*(sin(pi*pitch/180)*cos(pi*roll/180)*cos(pi*yaw/180) 
+          + sin(pi*roll/180)*sin(pi*yaw/180)) + world_z*cos(pi*pitch/180)*cos(pi*roll/180) 
+          + x*(sin(pi*pitch/180)*sin(pi*yaw/180)*cos(pi*roll/180) - sin(pi*roll/180)*cos(pi*yaw/180)) 
+          + y*(sin(pi*pitch/180)*cos(pi*roll/180)*cos(pi*yaw/180) + sin(pi*roll/180)*sin(pi*yaw/180)) 
+          + z*cos(pi*pitch/180)*cos(pi*roll/180)))**2 + (2*focallength*(world_x*sin(pi*yaw/180)*cos(pi*pitch/180) 
+          + world_y*cos(pi*pitch/180)*cos(pi*yaw/180) - world_z*sin(pi*pitch/180) + x*sin(pi*yaw/180)*cos(pi*pitch/180) 
+          + y*cos(pi*pitch/180)*cos(pi*yaw/180) - z*sin(pi*pitch/180)) 
+          + (2*screen_y - width)*(world_x*(sin(pi*pitch/180)*sin(pi*yaw/180)*cos(pi*roll/180) 
+              - sin(pi*roll/180)*cos(pi*yaw/180)) + world_y*(sin(pi*pitch/180)*cos(pi*roll/180)*cos(pi*yaw/180) 
+              + sin(pi*roll/180)*sin(pi*yaw/180)) + world_z*cos(pi*pitch/180)*cos(pi*roll/180) 
+              + x*(sin(pi*pitch/180)*sin(pi*yaw/180)*cos(pi*roll/180) - sin(pi*roll/180)*cos(pi*yaw/180)) 
+              + y*(sin(pi*pitch/180)*cos(pi*roll/180)*cos(pi*yaw/180) + sin(pi*roll/180)*sin(pi*yaw/180)) 
+              + z*cos(pi*pitch/180)*cos(pi*roll/180)))**2)/(4*(world_x*(sin(pi*pitch/180)*sin(pi*yaw/180)*cos(pi*roll/180) 
+              - sin(pi*roll/180)*cos(pi*yaw/180)) + world_y*(sin(pi*pitch/180)*cos(pi*roll/180)*cos(pi*yaw/180) 
+              + sin(pi*roll/180)*sin(pi*yaw/180)) + world_z*cos(pi*pitch/180)*cos(pi*roll/180) 
+              + x*(sin(pi*pitch/180)*sin(pi*yaw/180)*cos(pi*roll/180) - sin(pi*roll/180)*cos(pi*yaw/180)) 
+              + y*(sin(pi*pitch/180)*cos(pi*roll/180)*cos(pi*yaw/180) + sin(pi*roll/180)*sin(pi*yaw/180)) 
+              + z*cos(pi*pitch/180)*cos(pi*roll/180))**2))
+      console.log(world_x, world_y)
+      console.log(screen_x, screen_y)
+      error += e
+  }
+  return error
+}
+
 
 function sortlines(lines, reference) {
   function value(line){
@@ -125,7 +183,7 @@ function embed(l){
   return [Math.sin(2 * l[1]), Math.cos(2 * l[1])]
 }  
 function split(lines) {
-  window.trackingctx = document.getElementById("tracking").getContext("2d")
+  //window.trackingctx = document.getElementById("tracking").getContext("2d")
 
 
   clustermaker.k(2)
@@ -144,20 +202,20 @@ function split(lines) {
   //gmm.runEM(7)
   var lines1 = []
   var lines2 = []
-  window.trackingctx.fillStyle = "rgba(255,255,255,1)"
-          window.trackingctx.fillRect(0, 0, 128, 128)
+  //window.trackingctx.fillStyle = "rgba(255,255,255,1)"
+  //        window.trackingctx.fillRect(0, 0, 128, 128)
   lines.forEach(l => {
     //if(gmm.predictNormalize(embed(l))[0] > .5){
     if(distance(embed(l), res[0].centroid) < distance(embed(l), res[1].centroid)) {
       lines1.push(l)
 
-      window.trackingctx.fillStyle = "rgba(255,0,0,1)"
-      window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+      //window.trackingctx.fillStyle = "rgba(255,0,0,1)"
+      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
 
     } else {
       lines2.push(l)
-      window.trackingctx.fillStyle = "rgba(0,255,0,1)"
-      window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+      //window.trackingctx.fillStyle = "rgba(0,255,0,1)"
+      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
 
     }
     
@@ -165,7 +223,7 @@ function split(lines) {
   return [lines1, lines2]
 
 }
-
+var imu_yaw2grid_yaw_delta
 window.prune_strat = "mostvotes"
 function getlines (array, imu_idx) {
   window.mat = cv.matFromArray(128, 128, cv.CV_32F, array)
@@ -288,9 +346,27 @@ function getlines (array, imu_idx) {
 
     drawLinesJ(split_lines[0], dst, [0, 255, 0, 255])
     drawLinesJ(split_lines[1], dst, [255, 0, 255, 255])
+
+    split_lines[0] = sortlines(split_lines[0], split_lines[1])
+    split_lines[1] = sortlines(split_lines[1], split_lines[0])
+
+    var world_points = []
+    var screen_points = []
+
+    for(var i = 0; i < split_lines[0].length; ++i) {
+      var l1 = split_lines[0][i]
+      for( var j = 0; j < split_lines[1].length; ++j) {
+        var l2 = split_lines[1][j]
+        var x = intersection(l1, l2)
+        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight]
+        screen_points.push(x)
+        world_points.push([i - 1, j - 1, 0])
+
+      } 
+    }
     
     cv.imshow('lines', dst);
-    /*
+    
     $.ajax({
       type: "POST",
       url: "/linestotransform",
@@ -302,7 +378,7 @@ function getlines (array, imu_idx) {
       }),
       success: (data) => {
         var vector = data.vector
-        
+        console.log(error(vector, screen_points, world_points))
         var offset
         if (!run_once) {
           imu_yaw2grid_yaw_delta = vector[5] + events[imu_idx].alpha
@@ -341,15 +417,19 @@ function getlines (array, imu_idx) {
           window.trackingctx.fillRect(0, 0, 128, 128)
           window.trackingctx.fillStyle = "rgba(255,0,0,1)"
           window.trackingctx.fillRect(128 * x, 128 - 128 * y, 4, 4)
+
+
+          
         }
 
       }
     })
-    */
+    
     dst.delete();
   }
 
 }
+
 window.preference = -.6;
 var sessionid = Math.round(90000 * Math.random())
 var recording = false
