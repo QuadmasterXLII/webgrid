@@ -4,6 +4,33 @@ html, body {
     background: #ecf0f1 !important;
 }
 
+.loading-fade {
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: rgba(0, 0, 0, .3);
+}
+
+.loading-msg {
+    width: 300px;
+    height: 300px;
+    margin-top: -150px;
+    margin-left: -150px;
+
+    position: absolute;
+    top: 50%;
+    left: 50%;
+
+    background-color: rgba(240, 240, 240, 1);
+
+    font-size: 1.8rem
+
+}
+
 #runmodel, #runonce, #submit{
     font-size: 1.8rem;
 }
