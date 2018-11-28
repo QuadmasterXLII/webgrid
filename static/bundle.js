@@ -48482,14 +48482,15 @@ async function init() {
     // events = []
   })
   */
-  jquery__WEBPACK_IMPORTED_MODULE_2__('#runmodel').click(function () {
+  function clickrun() {
     running = !running;
     jquery__WEBPACK_IMPORTED_MODULE_2__("#runmodel").text(running ? "Stop Model" : "Run Model");
     if (running) {
 
       runmodel();
     }
-  });
+  }
+  jquery__WEBPACK_IMPORTED_MODULE_2__('#runmodel').click(clickrun);
 
   jquery__WEBPACK_IMPORTED_MODULE_2__('#runonce').click(function () {
     runmodel();
@@ -48526,6 +48527,14 @@ async function init() {
   } else {
     jquery__WEBPACK_IMPORTED_MODULE_2__('log').append('No DeviceOrientationEvent');
   }
+  function checkLoadingDone() {
+    if (cv.Mat) {
+      jquery__WEBPACK_IMPORTED_MODULE_2__(".loading-fade").hide();
+      jquery__WEBPACK_IMPORTED_MODULE_2__(".loading-msg").hide();
+      clickrun();
+    } else setTimeout(checkLoadingDone, 130);
+  }
+  setTimeout(checkLoadingDone, 130);
 
   /* const player = document.getElementById('player')
         const constraints = {
