@@ -575,14 +575,15 @@ async function init () {
     // events = []
   })
   */
-  $('#runmodel').click(function () {
+  function clickrun() {
     running = !running
     $("#runmodel").text (running ? "Stop Model" : "Run Model")
     if (running) {
 
       runmodel()
     }
-  })
+  }
+  $('#runmodel').click(clickrun)
 
   $('#runonce').click(function () {
     runmodel()
@@ -619,6 +620,15 @@ async function init () {
   } else {
     $('log').append('No DeviceOrientationEvent')
   }
+  function checkLoadingDone() {
+    if(cv.Mat){
+      $(".loading-fade").hide()
+      $(".loading-msg").hide()
+      clickrun()
+    }
+    else setTimeout(checkLoadingDone, 130)
+  }
+setTimeout(checkLoadingDone, 130)
 
   /* const player = document.getElementById('player')
 
