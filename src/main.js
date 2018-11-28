@@ -1,8 +1,6 @@
 
 import * as tf from '@tensorflow/tfjs'
 import { Webcam } from './webcam'
-import * as cv from './opencvcustom'
-
 // import * from 'readgyros';
 
 import * as $ from 'jquery'
@@ -12,8 +10,6 @@ import * as apclust from 'affinity-propagation'
 //const GMM = require("gaussian-mixture-model")
 var clustermaker = require("clusters")
 var fmin = require("fmin")
-
-
 
 
 function log (l) {
@@ -245,6 +241,7 @@ function sortlines(lines, reference) {
   }
   return lines.sort((a, b) => value(a) - value(b))
 }
+
 function mod1(x) {
   return (x % 1 + 1) % 1
 }
