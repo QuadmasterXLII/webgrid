@@ -4,6 +4,9 @@ from werkzeug.utils import secure_filename
 from binascii import a2b_base64
 import registerFromImage
 import numpy as np
+
+import time
+import pickle
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
@@ -42,6 +45,16 @@ def linestotransform():
 
 
     return jsonify({'error': error, "vector": [v for v in vector]})
+
+@app.route('/uploadtrack', methods=["POST"])
+def uploadtrack():
+    json = request.get_json()
+    print([trans["imu_idx"] for trans in json["transforms"]])
+    
+
+
+    return ""
+
 
 
 if __name__ == "__main__":
