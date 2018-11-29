@@ -44,14 +44,12 @@ async function runmodel () {
   getlines(window.output_array, imu_idx)
   //running = false;
   if (running) {
-    setTimeout(runmodel, 30)
+    setTimeout(runmodel, 5)
   }
 }
 
 function intersection(line1, line2){
     //Finds the intersection of two lines given in Hesse normal form.
-
-//
     //Returns closest integer pixel locations.
     //See https://stackoverflow.com/a/383527/5087436
 
@@ -109,116 +107,6 @@ function mat32FToArray(mat) {
 var run_once = false
 let error_scale = 100
 
-function error(vector, screen_points, world_points){
-
-    var sin = Math.sin
-    var cos = Math.cos
-    var pi = Math.PI
-    var height = 128
-    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
-    //console.log(width, height)
-
-    var x = vector[0]
-    var y = vector[1]
-    var z = vector[2]
-    var pitch =vector[3]
-    var roll = vector[4]
-    var yaw = vector[5]
-
-    var sinpitch = sin(pitch)
-    var cospitch = cos(pitch)
-
-    var sinroll = sin(roll)
-    var cosroll = cos(roll)
-
-    var sinyaw = sin(yaw)
-    var cosyaw = cos(yaw)
-
-    var focallength = vector[6]
-    var error = 0
-    for(var i = 0; i < screen_points.length; ++i) {
-      var screen_point = screen_points[i]
-      var world_point = world_points[i]
-      var screen_x = screen_point[0]
-      var screen_y = screen_point[1]
-      var world_x= world_point[0]
-      var world_y = world_point[1]
-      var world_z = world_point[2]
-    
-      var e = (-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x)**2 + (-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)**2
-      //console.log(world_x, world_y)
-      //console.log(screen_x, screen_y)
-      error += e
-  }
-  return error / error_scale
-}
-function gradient(vector, screen_points, world_points){
-
-    var sin = Math.sin
-    var cos = Math.cos
-    var pi = Math.PI
-    var height = 128
-    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
-    //console.log(width, height)
-
-    var x = vector[0]
-    var y = vector[1]
-    var z = vector[2]
-    var pitch =vector[3]
-    var roll = vector[4]
-    var yaw = vector[5]
-
-    var sinpitch = sin(pitch)
-    var cospitch = cos(pitch)
-
-    var sinroll = sin(roll)
-    var cosroll = cos(roll)
-
-    var sinyaw = sin(yaw)
-    var cosyaw = cos(yaw)
-
-
-
-
-
-    var focallength = vector[6]
-    var dx = 0, dy=0, dz=0, dyaw=0
-    for(var i = 0; i < screen_points.length; ++i) {
-      var screen_point = screen_points[i]
-      var world_point = world_points[i]
-      var screen_x = screen_point[0]
-      var screen_y = screen_point[1]
-      var world_x= world_point[0]
-      var world_y = world_point[1]
-      var world_z = world_point[2]
-    
-      dx += (-2*focallength*(sinpitch*sinroll*sinyaw + cosroll*cosyaw)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - 2*focallength*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw)*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x) + (-2*focallength*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw)*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*sinyaw*cospitch/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)
-      dy +=(-2*focallength*(sinpitch*sinroll*cosyaw - sinyaw*cosroll)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - 2*focallength*(-sinpitch*cosroll*cosyaw - sinroll*sinyaw)*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x) + (-2*focallength*(-sinpitch*cosroll*cosyaw - sinroll*sinyaw)*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*cospitch*cosyaw/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)
-      dz +=(2*focallength*sinpitch/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + 2*focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)*cospitch*cosroll/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2) + (2*focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)*cospitch*cosroll/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*sinroll*cospitch/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x)
-
-      dyaw +=(-2*focallength*(world_x*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_y*(-sinpitch*sinroll*sinyaw - cosroll*cosyaw) + x*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + y*(-sinpitch*sinroll*sinyaw - cosroll*cosyaw))/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - 2*focallength*(-world_x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - world_y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw) - x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw))*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x) + (-2*focallength*(-world_x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - world_y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw) - x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw))*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*(world_x*cospitch*cosyaw - world_y*sinyaw*cospitch + x*cospitch*cosyaw - y*sinyaw*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)
-
-  }
-  return [dx/ error_scale, dy/ error_scale, dz/ error_scale, dyaw/ error_scale]
-}
-/*
-function make_error_params(vector, screen_points, world_points){
-  vector = vector.slice()
-  function error_restricted(vector2, fprime){
-    [[0, 0], [1, 1], [2, 2], [3, 5]].forEach((j)=>{
-      vector[j[1]] = vector2[j[0]]
-    })
-    var fp = gradient(vector, screen_points, world_points)
-    fprime = fprime || [0, 0, 0, 0]
-    for(var j=0; j < 4; j++){
-      fprime[j] = fp[j]
-    }
-    return error(vector, screen_points, world_points)
-  }
-  
-  return error_restricted
-}
-*/
 function make_error_params(vector, screen_points, world_points){
   vector = vector.slice()
   function error_restricted(vector2, fprime){
@@ -246,12 +134,12 @@ function make_error_params(vector, screen_points, world_points){
     var yaw = vector[5]
     var focallength = vector[6]
 
-    let x0  =  sin(pitch)
-    let x1  =  sin(yaw)
-    let x2  =  cos(pitch)
-    let x4  =  cos(yaw)
-    let x9  =  cos(roll)
-    let x12  =  sin(roll)
+    let x0 = sin(pitch)
+    let x1 = sin(yaw)
+    let x2 = cos(pitch)
+    let x4 = cos(yaw)
+    let x9 = cos(roll)
+    let x12 = sin(roll)
 
     var error = 0
 
@@ -265,40 +153,40 @@ function make_error_params(vector, screen_points, world_points){
       var world_z = world_point[2]
       let x3  =  world_x*x2
       
-      let x5  =  world_y*x2
-      let x6  =  x*x2
-      let x7  =  x2*y
-      let x8  =  -world_z*x0 - x0*z + x1*x3 + x1*x6 + x4*x5 + x4*x7
+      let x5 = world_y*x2
+      let x6 = x*x2
+      let x7 = x2*y
+      let x8 = -world_z*x0 - x0*z + x1*x3 + x1*x6 + x4*x5 + x4*x7
       
-      let x10  =  world_z*x2
-      let x11  =  x2*z
+      let x10 = world_z*x2
+      let x11 = x2*z
       
-      let x13  =  x1*x12
-      let x14  =  x4*x9
-      let x15  =  x0*x14
-      let x16  =  x13 + x15
-      let x17  =  x12*x4
-      let x18  =  x1*x9
-      let x19  =  x0*x18
-      let x20  =  -x17 + x19
-      let x21  =  world_x*x20 + world_y*x16 + x*x20 + x10*x9 + x11*x9 + x16*y
-      let x22  =  1/x21
-      let x23  =  -focallength*x22*x8 - screen_y + width/2
-      let x24  =  x0*x13
-      let x25  =  x14 + x24
-      let x26  =  x0*x17 - x18
-      let x27  =  world_x*x25 + world_y*x26 + x*x25 + x10*x12 + x11*x12 + x26*y
-      let x28  =  -focallength*x22*x27 + height/2 - screen_x
-      let x29  =  2*focallength*x2*x22
-      let x30  =  x17 - x19
-      let x31  =  x21**(-2)
-      let x32  =  2*focallength*x31*x8
-      let x33  =  2*focallength*x22
-      let x34  =  2*focallength*x27*x31
-      let x35  =  -x13 - x15
-      let x36  =  x2*x9
-      let x37  =  -world_x*x16 - world_y*x30 - x*x16 - x30*y
-      let x38  =  -x14 - x24
+      let x13 = x1*x12
+      let x14 = x4*x9
+      let x15 = x0*x14
+      let x16 = x13 + x15
+      let x17 = x12*x4
+      let x18 = x1*x9
+      let x19 = x0*x18
+      let x20 = -x17 + x19
+      let x21 = world_x*x20 + world_y*x16 + x*x20 + x10*x9 + x11*x9 + x16*y
+      let x22 = 1/x21
+      let x23 = -focallength*x22*x8 - screen_y + width/2
+      let x24 = x0*x13
+      let x25 = x14 + x24
+      let x26 = x0*x17 - x18
+      let x27 = world_x*x25 + world_y*x26 + x*x25 + x10*x12 + x11*x12 + x26*y
+      let x28 = -focallength*x22*x27 + height/2 - screen_x
+      let x29 = 2*focallength*x2*x22
+      let x30 = x17 - x19
+      let x31 = x21**(-2)
+      let x32 = 2*focallength*x31*x8
+      let x33 = 2*focallength*x22
+      let x34 = 2*focallength*x27*x31
+      let x35 = -x13 - x15
+      let x36 = x2*x9
+      let x37 = -world_x*x16 - world_y*x30 - x*x16 - x30*y
+      let x38 = -x14 - x24
 
       
       
@@ -315,6 +203,58 @@ function make_error_params(vector, screen_points, world_points){
   }
   
   return error_restricted
+}
+
+function project_points(vector, world_points){
+  var sin = Math.sin
+  var cos = Math.cos
+  var pi = Math.PI
+  var height = 128
+  var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
+
+  var x = vector[0]
+  var y = vector[1]
+  var z = vector[2]
+  var pitch =vector[3]
+  var roll = vector[4]
+  var yaw = vector[5]
+  var focallength = vector[6]
+
+  screen_points = []
+
+  let x0  =  sin(roll)
+  let x1  =  cos(pitch)
+  let x2  =  world_z*x1
+  let x3  =  x1*z
+  let x4  =  cos(roll)
+  let x5  =  cos(yaw)
+  let x6  =  x4*x5
+  let x7  =  sin(pitch)
+  let x8  =  sin(yaw)
+  let x9  =  x0*x8
+  let x10  =  x6 + x7*x9
+  let x11  =  x4*x8
+  let x12  =  x0*x5
+  let x13  =  -x11 + x12*x7
+  let x14  =  x6*x7 + x9
+  let x15  =  x11*x7 - x12
+  let x17  =  x1*x8
+  let x18  =  x1*x5
+  let x_19 = x*x15 + x14*y + x2*x4 + x3*x4
+
+
+  for(var i = 0; i < world_points.length; ++i) {
+    var world_point = world_points[i]
+    var world_x= world_point[0]
+    var world_y = world_point[1]
+    var world_z = world_point[2]
+
+    
+    let x16  =  focallength/(world_x*x15 + world_y*x14 + x_19)
+    screen_points.push([height/2 - x16*(world_x*x10 + world_y*x13 + x*x10 + x0*x2 + x0*x3 + x13*y), width/2 - x16*(world_x*x17 + world_y*x18 - world_z*x7 + x*x17 + x18*y - x7*z)])
+
+  }
+  return screen_points
 }
 
 function solve_minimum(vector, screen_points, world_points) {
@@ -605,6 +545,8 @@ function getlines (array, imu_idx) {
 
 
       $("#transform").text(vector)
+      events[imu_idx].transform = vector
+      events[imu_idx].lines = split_lines
       $("#error").text(error)
       $("#offset").text((offset * 180 / Math.PI) % 90)
 
