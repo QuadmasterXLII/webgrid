@@ -1,8 +1,6 @@
 
 import * as tf from '@tensorflow/tfjs'
 import { Webcam } from './webcam'
-import * as cv from './opencvcustom'
-
 // import * from 'readgyros';
 
 import * as $ from 'jquery'
@@ -13,9 +11,7 @@ import * as apclust from 'affinity-propagation'
 var clustermaker = require("clusters")
 var fmin = require("fmin")
 
-
-
-
+window.cnt = 0
 function log (l) {
   // $('#log').append(l + '<br>')
   console.log(l)
@@ -34,28 +30,26 @@ async function runmodel () {
 
     output = tf.reshape(output, [128, 128, 2])
 
-    window.output = output
+    //window.output = output
 
-    output = tf.concat([output, tf.add(1, tf.mul(-0.001, output))], 2)
+    //output = tf.concat([output, tf.add(1, tf.mul(-0.001, output))], 2)
 
-    return output.add(-0.5).mul(3000).clipByValue(0, 1)
+    return output.add(-0.5).mul(3000).clipByValue(0, 1).slice([0, 0, 1], [128, 128, 1])
   })
   //tf.toPixels(output, document.getElementById('segmentation'))
   //log('done')
 
-  window.output_array = await output.slice([0, 0, 1], [128, 128, 1]).data()
+  window.output_array = await output.data()
 
   getlines(window.output_array, imu_idx)
   //running = false;
   if (running) {
-    setTimeout(runmodel, 30)
+    setTimeout(runmodel, 5)
   }
 }
 
 function intersection(line1, line2){
     //Finds the intersection of two lines given in Hesse normal form.
-
-//
     //Returns closest integer pixel locations.
     //See https://stackoverflow.com/a/383527/5087436
 
@@ -112,126 +106,169 @@ function mat32FToArray(mat) {
 
 var run_once = false
 let error_scale = 100
-function error(vector, screen_points, world_points){
-
-    var sin = Math.sin
-    var cos = Math.cos
-    var pi = Math.PI
-    var height = 128
-    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
-    //console.log(width, height)
-
-    var x = vector[0]
-    var y = vector[1]
-    var z = vector[2]
-    var pitch =vector[3]
-    var roll = vector[4]
-    var yaw = vector[5]
-
-    var sinpitch = sin(pitch)
-    var cospitch = cos(pitch)
-
-    var sinroll = sin(roll)
-    var cosroll = cos(roll)
-
-    var sinyaw = sin(yaw)
-    var cosyaw = cos(yaw)
-
-    var focallength = vector[6]
-    var error = 0
-    for(var i = 0; i < screen_points.length; ++i) {
-      var screen_point = screen_points[i]
-      var world_point = world_points[i]
-      var screen_x = screen_point[0]
-      var screen_y = screen_point[1]
-      var world_x= world_point[0]
-      var world_y = world_point[1]
-      var world_z = world_point[2]
-    
-      var e = (-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x)**2 + (-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)**2
-      //console.log(world_x, world_y)
-      //console.log(screen_x, screen_y)
-      error += e
-  }
-  return error / error_scale
-}
-function gradient(vector, screen_points, world_points){
-
-    var sin = Math.sin
-    var cos = Math.cos
-    var pi = Math.PI
-    var height = 128
-    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
-    //console.log(width, height)
-
-    var x = vector[0]
-    var y = vector[1]
-    var z = vector[2]
-    var pitch =vector[3]
-    var roll = vector[4]
-    var yaw = vector[5]
-
-    var sinpitch = sin(pitch)
-    var cospitch = cos(pitch)
-
-    var sinroll = sin(roll)
-    var cosroll = cos(roll)
-
-    var sinyaw = sin(yaw)
-    var cosyaw = cos(yaw)
-
-
-
-
-
-    var focallength = vector[6]
-    var dx = 0, dy=0, dz=0, dyaw=0
-    for(var i = 0; i < screen_points.length; ++i) {
-      var screen_point = screen_points[i]
-      var world_point = world_points[i]
-      var screen_x = screen_point[0]
-      var screen_y = screen_point[1]
-      var world_x= world_point[0]
-      var world_y = world_point[1]
-      var world_z = world_point[2]
-    
-      dx += (-2*focallength*(sinpitch*sinroll*sinyaw + cosroll*cosyaw)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - 2*focallength*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw)*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x) + (-2*focallength*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw)*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*sinyaw*cospitch/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)
-      dy +=(-2*focallength*(sinpitch*sinroll*cosyaw - sinyaw*cosroll)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - 2*focallength*(-sinpitch*cosroll*cosyaw - sinroll*sinyaw)*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x) + (-2*focallength*(-sinpitch*cosroll*cosyaw - sinroll*sinyaw)*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*cospitch*cosyaw/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)
-      dz +=(2*focallength*sinpitch/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + 2*focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)*cospitch*cosroll/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2) + (2*focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)*cospitch*cosroll/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*sinroll*cospitch/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x)
-
-      dyaw +=(-2*focallength*(world_x*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_y*(-sinpitch*sinroll*sinyaw - cosroll*cosyaw) + x*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + y*(-sinpitch*sinroll*sinyaw - cosroll*cosyaw))/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - 2*focallength*(-world_x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - world_y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw) - x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw))*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2)*(-focallength*(world_x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + world_y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + world_z*sinroll*cospitch + x*(sinpitch*sinroll*sinyaw + cosroll*cosyaw) + y*(sinpitch*sinroll*cosyaw - sinyaw*cosroll) + z*sinroll*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) + height/2 - screen_x) + (-2*focallength*(-world_x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - world_y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw) - x*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) - y*(-sinpitch*sinyaw*cosroll + sinroll*cosyaw))*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll)**2 - 2*focallength*(world_x*cospitch*cosyaw - world_y*sinyaw*cospitch + x*cospitch*cosyaw - y*sinyaw*cospitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll))*(-focallength*(world_x*sinyaw*cospitch + world_y*cospitch*cosyaw - world_z*sinpitch + x*sinyaw*cospitch + y*cospitch*cosyaw - z*sinpitch)/(world_x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + world_y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + world_z*cospitch*cosroll + x*(sinpitch*sinyaw*cosroll - sinroll*cosyaw) + y*(sinpitch*cosroll*cosyaw + sinroll*sinyaw) + z*cospitch*cosroll) - screen_y + width/2)
-
-  }
-  return [dx/ error_scale, dy/ error_scale, dz/ error_scale, dyaw/ error_scale]
-}
 
 function make_error_params(vector, screen_points, world_points){
   vector = vector.slice()
   function error_restricted(vector2, fprime){
+    window.cnt += 1;
     [[0, 0], [1, 1], [2, 2], [3, 5]].forEach((j)=>{
       vector[j[1]] = vector2[j[0]]
     })
-    var fp = gradient(vector, screen_points, world_points)
+    var sin = Math.sin
+    var cos = Math.cos
+    var pi = Math.PI
+    var height = 128
+    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
+    
     fprime = fprime || [0, 0, 0, 0]
     for(var j=0; j < 4; j++){
-      fprime[j] = fp[j]
+      fprime[j] = 0
     }
-    return error(vector, screen_points, world_points)
+    //console.log(width, height)
+
+    var x = vector[0]
+    var y = vector[1]
+    var z = vector[2]
+    var pitch =vector[3]
+    var roll = vector[4]
+    var yaw = vector[5]
+    var focallength = vector[6]
+
+    let x0 = sin(pitch)
+    let x1 = sin(yaw)
+    let x2 = cos(pitch)
+    let x4 = cos(yaw)
+    let x9 = cos(roll)
+    let x12 = sin(roll)
+
+    var error = 0
+
+    for(var i = 0; i < screen_points.length; ++i) {
+      var screen_point = screen_points[i]
+      var world_point = world_points[i]
+      var screen_x = screen_point[0]
+      var screen_y = screen_point[1]
+      var world_x= world_point[0]
+      var world_y = world_point[1]
+      var world_z = world_point[2]
+      let x3  =  world_x*x2
+      
+      let x5 = world_y*x2
+      let x6 = x*x2
+      let x7 = x2*y
+      let x8 = -world_z*x0 - x0*z + x1*x3 + x1*x6 + x4*x5 + x4*x7
+      
+      let x10 = world_z*x2
+      let x11 = x2*z
+      
+      let x13 = x1*x12
+      let x14 = x4*x9
+      let x15 = x0*x14
+      let x16 = x13 + x15
+      let x17 = x12*x4
+      let x18 = x1*x9
+      let x19 = x0*x18
+      let x20 = -x17 + x19
+      let x21 = world_x*x20 + world_y*x16 + x*x20 + x10*x9 + x11*x9 + x16*y
+      let x22 = 1/x21
+      let x23 = -focallength*x22*x8 - screen_y + width/2
+      let x24 = x0*x13
+      let x25 = x14 + x24
+      let x26 = x0*x17 - x18
+      let x27 = world_x*x25 + world_y*x26 + x*x25 + x10*x12 + x11*x12 + x26*y
+      let x28 = -focallength*x22*x27 + height/2 - screen_x
+      let x29 = 2*focallength*x2*x22
+      let x30 = x17 - x19
+      let x31 = x21**(-2)
+      let x32 = 2*focallength*x31*x8
+      let x33 = 2*focallength*x22
+      let x34 = 2*focallength*x27*x31
+      let x35 = -x13 - x15
+      let x36 = x2*x9
+      let x37 = -world_x*x16 - world_y*x30 - x*x16 - x30*y
+      let x38 = -x14 - x24
+
+      
+      
+
+
+      fprime[0] += (x23*(-x1*x29 - x30*x32) + x28*(-x25*x33 - x30*x34) ) / error_scale
+      fprime[1] += (x23*(-x29*x4 - x32*x35) + x28*(-x26*x33 - x34*x35)) / error_scale
+      fprime[2] += (x23*(x0*x33 + x32*x36) + x28*(-x12*x29 + x34*x36)) / error_scale
+      fprime[3] += (x23*(-x32*x37 - x33*(-x1*x5 - x1*x7 + x3*x4 + x4*x6)) + x28*(-x33*(world_x*x26 + world_y*x38 + x*x26 + x38*y) - x34*x37)) / error_scale
+      error += (x23**2 + x28**2) / error_scale
+    }
+    
+    return error
   }
   
   return error_restricted
 }
 
+function project_points(vector, world_points){
+  var sin = Math.sin
+  var cos = Math.cos
+  var pi = Math.PI
+  var height = 128
+  var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
+
+  var x = vector[0]
+  var y = vector[1]
+  var z = vector[2]
+  var pitch =vector[3]
+  var roll = vector[4]
+  var yaw = vector[5]
+  var focallength = vector[6]
+
+  screen_points = []
+
+  let x0  =  sin(roll)
+  let x1  =  cos(pitch)
+  let x2  =  world_z*x1
+  let x3  =  x1*z
+  let x4  =  cos(roll)
+  let x5  =  cos(yaw)
+  let x6  =  x4*x5
+  let x7  =  sin(pitch)
+  let x8  =  sin(yaw)
+  let x9  =  x0*x8
+  let x10  =  x6 + x7*x9
+  let x11  =  x4*x8
+  let x12  =  x0*x5
+  let x13  =  -x11 + x12*x7
+  let x14  =  x6*x7 + x9
+  let x15  =  x11*x7 - x12
+  let x17  =  x1*x8
+  let x18  =  x1*x5
+  let x_19 = x*x15 + x14*y + x2*x4 + x3*x4
+
+
+  for(var i = 0; i < world_points.length; ++i) {
+    var world_point = world_points[i]
+    var world_x= world_point[0]
+    var world_y = world_point[1]
+    var world_z = world_point[2]
+
+    
+    let x16  =  focallength/(world_x*x15 + world_y*x14 + x_19)
+    screen_points.push([height/2 - x16*(world_x*x10 + world_y*x13 + x*x10 + x0*x2 + x0*x3 + x13*y), width/2 - x16*(world_x*x17 + world_y*x18 - world_z*x7 + x*x17 + x18*y - x7*z)])
+
+  }
+  return screen_points
+}
+
 function solve_minimum(vector, screen_points, world_points) {
   var real_solution = {fx:9999999};
+  window.cnt = 0;
   [0].forEach((yaw) => {
     vector = vector.slice()
     var loss = make_error_params(vector, screen_points, world_points)
-    var solution = fmin.conjugateGradient(loss, [0, 0, -2.5, 0], {maxIterations: 1000}) // vector[0], vector[1], vector[2], vector[5]])
+    var solution = fmin.conjugateGradient(loss, [0, 0, -2.5, 0], {maxIterations: 300}) // vector[0], vector[1], vector[2], vector[5]])
     if(real_solution.fx > solution.fx){
       real_solution = solution
     }
   });
+  console.log("iterations: ", window.cnt)
   console.log(real_solution);
   [[0, 0], [1, 1], [2, 2], [3, 5]].forEach((j)=>{
     vector[j[1]] = real_solution.x[j[0]]
@@ -245,6 +282,7 @@ function sortlines(lines, reference) {
   }
   return lines.sort((a, b) => value(a) - value(b))
 }
+
 function mod1(x) {
   return (x % 1 + 1) % 1
 }
@@ -307,7 +345,7 @@ function getlines (array, imu_idx) {
   var temp = cv.Mat.zeros(128, 128, cv.CV_8UC1)
   var elem = cv.getStructuringElement(cv.MORPH_CROSS, new cv.Size(3, 3))
   var i
-  for (i = 0; i < 30; i++) {
+  for (i = 0; i < 7; i++) {
     cv.morphologyEx(gr, temp, cv.MORPH_OPEN, elem)
     cv.bitwise_not(temp, temp)
     cv.bitwise_and(gr, temp, temp)
@@ -324,6 +362,8 @@ function getlines (array, imu_idx) {
               27, 0, 0, 0, Math.PI);
   drawLines(lines, dst, [76, 0, 0, 255])
   if (lines.rows < 2){
+    cv.imshow('lines', dst);
+    dst.delete()
     return
   }
   
@@ -350,7 +390,7 @@ function getlines (array, imu_idx) {
   console.log(cluster_result)
   //console.table(lineDistMat)
   
-  if (cluster_result.converged){
+  if (cluster_result.exemplars.length > 1){
     var lines_pruned = []
     if (window.prune_strat == "mostvotes"){
       var cluster_exemplar_lookup = []
@@ -410,9 +450,7 @@ function getlines (array, imu_idx) {
     cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
 
 
-    if (lines_pruned.length < 3){
-      return
-    }
+    
 
 
     var split_lines = split(lines_pruned)
@@ -420,6 +458,12 @@ function getlines (array, imu_idx) {
 
     drawLinesJ(split_lines[0], dst, [0, 255, 0, 255])
     drawLinesJ(split_lines[1], dst, [255, 0, 255, 255])
+
+    if (lines_pruned.length < 3){
+      cv.imshow('lines', dst);
+      dst.delete()
+      return
+    }
 
     split_lines[0] = sortlines(split_lines[0], split_lines[1])
     split_lines[1] = sortlines(split_lines[1], split_lines[0])
@@ -497,12 +541,14 @@ function getlines (array, imu_idx) {
 
     }
     
-    if (error < .2){
+    if (error < .04 * screen_points.length){
 
 
       $("#transform").text(vector)
+      events[imu_idx].transform = vector
+      events[imu_idx].lines = split_lines
       $("#error").text(error)
-      $("#offset").text(offset)
+      $("#offset").text((offset * 180 / Math.PI) % 90)
 
 
 
