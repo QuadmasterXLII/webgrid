@@ -34,12 +34,16 @@ async function init () {
       type: 'POST',
       contentType: 'application/json; charset=utf-8',
       url: '/uploadtrack',
-      data: JSON.stringify({"imu_events": window.events, "transforms":window.transforms}),
+      data: JSON.stringify({
+        "orientation_events": gridslam.orientation_events,
+        "acceleration_events":gridslam.acceleration_events,
+        "transforms":window.transforms
+      }),
       datatype: 'json'
     })
     // events = []
   })
-  
+  $('#resetMap').click(gridslam.resetMap)
   
 
   function clickrun() {

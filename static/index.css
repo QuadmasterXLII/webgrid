@@ -31,7 +31,7 @@ html, body {
 
 }
 
-#runmodel, #runonce, #submit{
+#runmodel, #runonce, #submit, #save, #calibrateC, #resetMap{
     font-size: 1.8rem;
 }
 

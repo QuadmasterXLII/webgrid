@@ -8,7 +8,8 @@ var fmin = require("fmin")
 
 
 
-window.events = []
+export var orientation_events = []
+export var acceleration_events = []
 window.transforms = []
 export async function init() {
   
@@ -29,7 +30,7 @@ export async function init() {
   if (window.DeviceOrientationEvent) {
     
     window.addEventListener('deviceorientation', function (evt) {
-      window.events.push({
+      orientation_events.push({
         time: Date.now() / 1000,
         alpha: evt.alpha,
         beta: evt.beta,
@@ -42,6 +43,20 @@ export async function init() {
       $('#webkit').text(evt.webkitCompassHeading)
       */
     })
+
+    window.addEventListener('devicemotion', function (evt) {
+      acceleration_events.push({
+        time: Date.now() / 1000,
+        x: evt.acceleration.x,
+        y: evt.acceleration.y,
+        z: evt.acceleration.z
+      })
+      
+      $('#alpha').text(evt.acceleration.x)
+      $('#beta').text(evt.acceleration.y)
+      $('#gamma').text(evt.acceleration.z)
+      
+    })
   } else {
     console.log('No DeviceOrientationEvent')
   }
@@ -52,7 +67,7 @@ export function setRunning(r){
 }
 export async function runmodel () {
  
-  var imu_idx = window.events.length - 1 
+  var imu_idx = orientation_events.length - 1 
   var output = tf.tidy(() => {
     var image = window.webcam.capture()
     window.image = image
@@ -190,11 +205,11 @@ function project_points(vector, world_points){
 
 
 let error_scale = 100
-window.cnt = 0
+var iter_count = 0
 function make_error_params(vector, screen_points, world_points){
   vector = vector.slice()
   function error_restricted(vector2, fprime){
-    window.cnt += 1;
+    iter_count += 1;
     [[0, 0], [1, 1], [2, 2], [3, 5]].forEach((j)=>{
       vector[j[1]] = vector2[j[0]]
     })
@@ -293,7 +308,7 @@ function make_error_params(vector, screen_points, world_points){
 
 function solve_minimum(vector, screen_points, world_points) {
   var real_solution = {fx:9999999};
-  window.cnt = 0;
+  iter_count = 0;
   [0].forEach((yaw) => {
     vector = vector.slice()
     var loss = make_error_params(vector, screen_points, world_points)
@@ -302,7 +317,7 @@ function solve_minimum(vector, screen_points, world_points) {
       real_solution = solution
     }
   });
-  console.log("iterations: ", window.cnt)
+  console.log("iterations: ", iter_count)
   console.log(real_solution);
   [[0, 0], [1, 1], [2, 2], [3, 5]].forEach((j)=>{
     vector[j[1]] = real_solution.x[j[0]]
@@ -335,10 +350,7 @@ function split(lines) {
   var data = []
   lines.forEach(l => {
     data.push(embed(l))
-    //the following is horrible, but avoids singularities in the GMM code I'm using
-    /*gmm.addPoint(embed(l))
-    gmm.addPoint([embed(l)[0], embed(l)[1] + .03])
-    gmm.addPoint([embed(l)[0] + .03, embed(l)[1]])*/
+    
 
   })
   clustermaker.data(data)
@@ -370,6 +382,10 @@ function split(lines) {
 
 var imu_yaw2grid_yaw_delta
 var has_run_once = false
+export function resetMap() {
+  has_run_once = false
+  window.transforms = []
+}
 window.prune_strat = "mostvotes"
 function getlines (array, imu_idx) {
   window.mat = cv.matFromArray(128, 128, cv.CV_32F, array)
@@ -522,7 +538,7 @@ function getlines (array, imu_idx) {
     }
     
     cv.imshow('lines', dst);
-    var imu = events[imu_idx] || {
+    var imu = orientation_events[imu_idx] || {
         alpha: 0,
         beta: 0,
         gamma: 0
