@@ -47929,139 +47929,140 @@ module.exports = function(module) {
 
 /***/ }),
 
-/***/ "./src/main.js":
-/*!*********************!*\
-  !*** ./src/main.js ***!
-  \*********************/
-/*! no exports provided */
+/***/ "./src/gridslam.js":
+/*!*************************!*\
+  !*** ./src/gridslam.js ***!
+  \*************************/
+/*! exports provided: input_shape, orientation_events, acceleration_events, init, running, setRunning, runmodel, imu_yaw2grid_yaw_delta, resetMap */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "input_shape", function() { return input_shape; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "orientation_events", function() { return orientation_events; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "acceleration_events", function() { return acceleration_events; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "init", function() { return init; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "running", function() { return running; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "setRunning", function() { return setRunning; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "runmodel", function() { return runmodel; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "imu_yaw2grid_yaw_delta", function() { return imu_yaw2grid_yaw_delta; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "resetMap", function() { return resetMap; });
 /* harmony import */ var _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @tensorflow/tfjs */ "./node_modules/@tensorflow/tfjs/dist/tf.esm.js");
 /* harmony import */ var _webcam__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./webcam */ "./src/webcam.js");
-/* harmony import */ var jquery__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! jquery */ "./node_modules/jquery/dist/jquery.js");
-/* harmony import */ var jquery__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(jquery__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var affinity_propagation__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! affinity-propagation */ "./node_modules/affinity-propagation/src/affinityPropagation.js");
-/* harmony import */ var affinity_propagation__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(affinity_propagation__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./utils */ "./src/utils.js");
+/* harmony import */ var _kalman__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./kalman */ "./src/kalman.js");
+/* harmony import */ var jquery__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! jquery */ "./node_modules/jquery/dist/jquery.js");
+/* harmony import */ var jquery__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(jquery__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var affinity_propagation__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! affinity-propagation */ "./node_modules/affinity-propagation/src/affinityPropagation.js");
+/* harmony import */ var affinity_propagation__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(affinity_propagation__WEBPACK_IMPORTED_MODULE_5__);
 
 
 
-// import * from 'readgyros';
 
 
 
-
-
-//const GMM = require("gaussian-mixture-model")
 var clustermaker = __webpack_require__(/*! clusters */ "./node_modules/clusters/clusters.js");
 var fmin = __webpack_require__(/*! fmin */ "./node_modules/fmin/build/fmin.js");
 
-window.cnt = 0;
-function log(l) {
-  // $('#log').append(l + '<br>')
-  console.log(l);
+let input_shape = 128;
+
+var orientation_events = [];
+var acceleration_events = [];
+window.transforms = [];
+async function init() {
+
+  window.model = await _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["loadModel"]('/webgrid/static/tfjs_dir/model.json');
+
+  window.webcam = new _webcam__WEBPACK_IMPORTED_MODULE_1__["Webcam"](document.getElementById('player'));
+
+  await window.webcam.setup();
+
+  window.webcam.webcamElement.width = input_shape;
+  window.webcam.webcamElement.height = input_shape;
+
+  if (window.DeviceOrientationEvent) {
+
+    window.addEventListener('deviceorientation', function (evt) {
+      orientation_events.push({
+        time: Date.now() / 1000,
+        alpha: evt.alpha,
+        beta: evt.beta,
+        gamma: evt.gamma
+      });
+      /*
+      $('#alpha').text(evt.alpha)
+      $('#beta').text(evt.beta)
+      $('#gamma').text(evt.gamma)
+      $('#webkit').text(evt.webkitCompassHeading)
+      */
+    });
+
+    window.addEventListener('devicemotion', function (evt) {
+      acceleration_events.push({
+        time: Date.now() / 1000,
+        x: evt.acceleration.x,
+        y: evt.acceleration.y,
+        z: evt.acceleration.z
+      });
+      //setTimeout(()=> {
+      _kalman__WEBPACK_IMPORTED_MODULE_3__["update_imu"](orientation_events[orientation_events.length - 1], acceleration_events[acceleration_events.length - 1], imu_yaw2grid_yaw_delta, Date.now() / 1000);
+      //}, 200)
+
+      jquery__WEBPACK_IMPORTED_MODULE_4__('#alpha').text(evt.acceleration.x);
+      jquery__WEBPACK_IMPORTED_MODULE_4__('#beta').text(evt.acceleration.y);
+      jquery__WEBPACK_IMPORTED_MODULE_4__('#gamma').text(evt.acceleration.z);
+    });
+  } else {
+    console.log('No DeviceOrientationEvent');
+  }
+  _kalman__WEBPACK_IMPORTED_MODULE_3__["init"]();
 }
 var running = false;
+function setRunning(r) {
+  running = r;
+}
 async function runmodel() {
-  //log('getting image')
-  var imu_idx = window.events.length - 1;
+
+  var imu_idx = orientation_events.length - 1;
+  //console.log("Error:, ", Date.now() / 1000 - orientation_events[imu_idx].time) 
   var output = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["tidy"](() => {
     var image = window.webcam.capture();
     window.image = image;
-    // log("image " + image.shape);
 
-    //log('running model')
     var output = window.model.predict(image);
 
-    output = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["reshape"](output, [128, 128, 2]);
-
-    //window.output = output
-
+    output = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["reshape"](output, [input_shape, input_shape, 2]);
     //output = tf.concat([output, tf.add(1, tf.mul(-0.001, output))], 2)
 
-    return output.add(-0.5).mul(3000).clipByValue(0, 1).slice([0, 0, 1], [128, 128, 1]);
+    return output.add(-0.5).mul(3000).clipByValue(0, 1).slice([0, 0, 1], [input_shape, input_shape, 1]);
   });
   //tf.toPixels(output, document.getElementById('segmentation'))
   //log('done')
 
   window.output_array = await output.data();
-
-  getlines(window.output_array, imu_idx);
-  //running = false;
-  if (running) {
-    setTimeout(runmodel, 5);
-  }
-}
-
-function intersection(line1, line2) {
-  //Finds the intersection of two lines given in Hesse normal form.
-  //Returns closest integer pixel locations.
-  //See https://stackoverflow.com/a/383527/5087436
-
-  let rho1 = line1[0];
-  let theta1 = line1[1];
-  let rho2 = line2[0];
-  let theta2 = line2[1];
-  let A = cv.matFromArray(2, 2, cv.CV_32F, [Math.cos(theta1), Math.sin(theta1), Math.cos(theta2), Math.sin(theta2)]);
-  let b = cv.matFromArray(2, 1, cv.CV_32F, [rho1, rho2]);
-  let res = new cv.Mat();
-  cv.gemm(A.inv(cv.DECOMP_LU), b, 1, cv.matFromArray(2, 1, cv.CV_32F, [0, 0]), 0, res, 0);
-
-  return res;
-}
-function drawLines(lines, mat, color) {
-  for (let i = 0; i < lines.rows; ++i) {
-    let rho = lines.data32F[i * 3];
-    let theta = lines.data32F[i * 3 + 1];
-    let a = Math.cos(theta);
-    let b = Math.sin(theta);
-    let x0 = a * rho;
-    let y0 = b * rho;
-    let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
-    let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
-    cv.line(mat, startPoint, endPoint, color);
-  }
-}
-function drawLinesJ(lines, mat, color) {
-  for (let i = 0; i < lines.length; ++i) {
-    let rho = lines[i][0];
-    let theta = lines[i][1];
-    let a = Math.cos(theta);
-    let b = Math.sin(theta);
-    let x0 = a * rho;
-    let y0 = b * rho;
-    let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
-    let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
-    cv.line(mat, startPoint, endPoint, color);
-  }
-}
-function mat32FToArray(mat) {
-  var res = [];
-  for (let i = 0; i < mat.rows; ++i) {
-    res.push([]);
-    for (let j = 0; j < mat.cols; ++j) {
-      res[i].push(mat.data32F[i * mat.cols + j]);
+  setTimeout(() => {
+    getlines(window.output_array, imu_idx);
+    //running = false;
+    if (running) {
+      setTimeout(runmodel, 5);
     }
-  }
-  return res;
+  }, 0);
 }
 
-var run_once = false;
 let error_scale = 100;
-
+var iter_count = 0;
 function make_error_params(vector, screen_points, world_points) {
   vector = vector.slice();
   function error_restricted(vector2, fprime) {
-    window.cnt += 1;
+    iter_count += 1;
     [[0, 0], [1, 1], [2, 2], [3, 5]].forEach(j => {
       vector[j[1]] = vector2[j[0]];
     });
     var sin = Math.sin;
     var cos = Math.cos;
     var pi = Math.PI;
-    var height = 128;
-    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight;
+    var height = input_shape;
+    var width = input_shape / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight;
 
     fprime = fprime || [0, 0, 0, 0];
     for (var j = 0; j < 4; j++) {
@@ -48144,12 +48145,636 @@ function make_error_params(vector, screen_points, world_points) {
   return error_restricted;
 }
 
+function solve_minimum(vector, screen_points, world_points) {
+  var real_solution = { fx: 9999999 };
+  iter_count = 0;
+  [0].forEach(yaw => {
+    vector = vector.slice();
+    var loss = make_error_params(vector, screen_points, world_points);
+    var solution = fmin.conjugateGradient(loss, [0, 0, -2.5, 0], { maxIterations: 300 }); // vector[0], vector[1], vector[2], vector[5]])
+    if (real_solution.fx > solution.fx) {
+      real_solution = solution;
+    }
+  });
+  console.log("iterations: ", iter_count);
+  console.log(real_solution);
+  [[0, 0], [1, 1], [2, 2], [3, 5]].forEach(j => {
+    vector[j[1]] = real_solution.x[j[0]];
+  });
+  return { v: vector, error: real_solution.fx };
+}
+function sortlines(lines, reference) {
+  function value(line) {
+    return _utils__WEBPACK_IMPORTED_MODULE_2__["intersection"](line, reference[0]).data32F[0];
+  }
+  return lines.sort((a, b) => value(a) - value(b));
+}
+
+function embed(l) {
+  return [Math.sin(2 * l[1]), Math.cos(2 * l[1])];
+}
+function split(lines) {
+  //window.trackingctx = document.getElementById("tracking").getContext("2d")
+  clustermaker.k(2);
+  clustermaker.iterations(209);
+  var data = [];
+  lines.forEach(l => {
+    data.push(embed(l));
+  });
+  clustermaker.data(data);
+  var res = clustermaker.clusters();
+  var lines1 = [];
+  var lines2 = [];
+  //window.trackingctx.fillStyle = "rgba(255,255,255,1)"
+  //        window.trackingctx.fillRect(0, 0, input_shape, input_shape)
+  lines.forEach(l => {
+    if (_utils__WEBPACK_IMPORTED_MODULE_2__["distance"](embed(l), res[0].centroid) < _utils__WEBPACK_IMPORTED_MODULE_2__["distance"](embed(l), res[1].centroid)) {
+      lines1.push(l);
+      //window.trackingctx.fillStyle = "rgba(255,0,0,1)"
+      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+    } else {
+      lines2.push(l);
+      //window.trackingctx.fillStyle = "rgba(0,255,0,1)"
+      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
+    }
+  });
+  return [lines1, lines2];
+}
+
+var imu_yaw2grid_yaw_delta;
+var has_run_once = false;
+function resetMap() {
+  has_run_once = false;
+  window.transforms = [];
+  acceleration_events = [];
+  orientation_events = [];
+  _kalman__WEBPACK_IMPORTED_MODULE_3__["init"]();
+}
+window.prune_strat = "mostvotes";
+function getlines(array, imu_idx) {
+  window.mat = cv.matFromArray(input_shape, input_shape, cv.CV_32F, array);
+  var gr = new cv.Mat();
+  mat.convertTo(mat, cv.CV_8UC1);
+  cv.threshold(mat, gr, .5, 256, cv.THRESH_BINARY_INV);
+  window.gr = gr;
+  var skele = cv.Mat.zeros(input_shape, input_shape, cv.CV_8UC1);
+  var temp = cv.Mat.zeros(input_shape, input_shape, cv.CV_8UC1);
+  var elem = cv.getStructuringElement(cv.MORPH_CROSS, new cv.Size(3, 3));
+  var i;
+  for (i = 0; i < 7; i++) {
+    cv.morphologyEx(gr, temp, cv.MORPH_OPEN, elem);
+    cv.bitwise_not(temp, temp);
+    cv.bitwise_and(gr, temp, temp);
+    cv.bitwise_or(skele, temp, skele);
+    cv.erode(gr, gr, elem);
+  }
+
+  cv.imshow('skeleton', skele);
+  mat.delete();gr.delete();temp.delete();
+  let dst = cv.Mat.zeros(skele.rows, skele.cols, cv.CV_8UC3);
+  let lines = new cv.Mat();
+
+  cv.HoughLines(skele, lines, 1, Math.PI / 180, 27, 0, 0, 0, Math.PI);
+  _utils__WEBPACK_IMPORTED_MODULE_2__["drawLines"](lines, dst, [76, 0, 0, 255]);
+  if (lines.rows < 2) {
+    cv.imshow('lines', dst);
+    dst.delete();
+    return;
+  }
+
+  var lineDistMat = [];
+  for (let i = 0; i < lines.rows; ++i) {
+    lineDistMat.push([]);
+    for (let j = 0; j < lines.rows; ++j) {
+      var rho1 = lines.data32F[i * 3];
+      var theta1 = lines.data32F[i * 3 + 1];
+
+      let rho2 = lines.data32F[j * 3];
+      let theta2 = lines.data32F[j * 3 + 1];
+
+      let distance1 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2));
+      rho1 = rho1 * -1;
+      theta1 = theta1 - Math.PI;
+      let distance2 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2));
+      //console.log(distance1, distance2, rho1, theta1)
+      lineDistMat[i].push(Math.max(-distance1, -distance2));
+    }
+  }
+
+  var preference = -.6;
+  var cluster_result = affinity_propagation__WEBPACK_IMPORTED_MODULE_5__["getClusters"](lineDistMat, { preference: preference, damping: .5 });
+
+  if (cluster_result.exemplars.length > 1) {
+    var lines_pruned = [];
+    if (window.prune_strat == "mostvotes") {
+      var cluster_exemplar_lookup = [];
+
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+        cluster_exemplar_lookup[cluster_result.exemplars[j]] = j;
+        lines_pruned.push([0, 0, 0]);
+      }
+
+      for (let i = 0; i < lines.rows; ++i) {
+        var cluster_idx = cluster_exemplar_lookup[cluster_result.clusters[i]];
+
+        if (lines.data32F[i * 3 + 2] > lines_pruned[cluster_idx][2]) {
+          let rho = lines.data32F[i * 3];
+          let theta = lines.data32F[i * 3 + 1];
+          let score = lines.data32F[i * 3 + 2];
+
+          lines_pruned[cluster_idx] = [rho, theta, score];
+        }
+      }
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+        let rho = lines_pruned[j][0];
+        let theta = lines_pruned[j][1];
+        let a = Math.cos(theta);
+        let b = Math.sin(theta);
+        let x0 = a * rho;
+        let y0 = b * rho;
+        let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+        let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+      }
+    } else {
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+        let i = cluster_result.exemplars[j];
+        let rho = lines.data32F[i * 3];
+        let theta = lines.data32F[i * 3 + 1];
+        lines_pruned.push([rho, theta]);
+        let a = Math.cos(theta);
+        let b = Math.sin(theta);
+        let x0 = a * rho;
+        let y0 = b * rho;
+        let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+        let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+      }
+    }
+
+    /*let i1 = utils.mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
+    let i2 = utils.mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
+    console.log(i1)
+    cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
+
+    var split_lines = split(lines_pruned);
+
+    _utils__WEBPACK_IMPORTED_MODULE_2__["drawLinesJ"](split_lines[0], dst, [0, 255, 0, 255]);
+    _utils__WEBPACK_IMPORTED_MODULE_2__["drawLinesJ"](split_lines[1], dst, [255, 0, 255, 255]);
+
+    if (lines_pruned.length < 3) {
+      cv.imshow('lines', dst);
+      dst.delete();
+      return;
+    }
+
+    split_lines[0] = sortlines(split_lines[0], split_lines[1]);
+    split_lines[1] = sortlines(split_lines[1], split_lines[0]);
+
+    console.log(split_lines);
+
+    var world_points = [];
+    var screen_points = [];
+
+    for (var i = 0; i < split_lines[0].length; ++i) {
+      var l1 = split_lines[0][i];
+      for (var j = 0; j < split_lines[1].length; ++j) {
+        var l2 = split_lines[1][j];
+        var x = _utils__WEBPACK_IMPORTED_MODULE_2__["intersection"](l1, l2);
+        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight];
+        screen_points.push(x);
+        world_points.push([i - 1, j - 1, 0]);
+      }
+    }
+
+    cv.imshow('lines', dst);
+    var imu = orientation_events[imu_idx] || {
+      alpha: 0,
+      beta: 0,
+      gamma: 0
+    };
+    var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma / 180 * Math.PI, -imu.alpha / 180 * Math.PI, 4 / 3 * 117];
+    var res = solve_minimum(vector, screen_points, world_points);
+
+    world_points = [];
+    screen_points = [];
+
+    for (var i = 0; i < split_lines[1].length; ++i) {
+      var l1 = split_lines[1][i];
+      for (var j = 0; j < split_lines[0].length; ++j) {
+        var l2 = split_lines[0][j];
+        var x = _utils__WEBPACK_IMPORTED_MODULE_2__["intersection"](l1, l2);
+        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight];
+        screen_points.push(x);
+        world_points.push([i - 1, j - 1, 0]);
+      }
+    }
+
+    var res2 = solve_minimum(vector, screen_points, world_points);
+    var vector;
+    var error;
+    if (res2.error < res.error) {
+      vector = res2.v;
+      error = res2.error;
+    } else {
+      vector = res.v;
+      error = res.error;
+    }
+
+    var offset;
+    if (!has_run_once) {
+      if (split_lines[0].length == 1 || split_lines[1].length == 1) {
+        return;
+      }
+      imu_yaw2grid_yaw_delta = vector[5] + imu.alpha / 180 * Math.PI;
+      console.log(imu_yaw2grid_yaw_delta);
+      has_run_once = true;
+    } else {
+      var correct_yaw_grid_coords = -imu.alpha / 180 * Math.PI + imu_yaw2grid_yaw_delta;
+      offset = correct_yaw_grid_coords - vector[5];
+
+      var cos = Math.cos(offset);
+      var sin = Math.sin(offset);
+      var x = _utils__WEBPACK_IMPORTED_MODULE_2__["mod1"](cos * vector[0] + sin * vector[1]);
+      var y = _utils__WEBPACK_IMPORTED_MODULE_2__["mod1"](-sin * vector[0] + cos * vector[1]);
+      vector[0] = x;
+      vector[1] = y;
+      vector[5] = correct_yaw_grid_coords;
+    }
+    if (error < .1 * screen_points.length) {
+      window.transforms.push({ 'imu_idx': imu_idx, 'transform': vector, 'lines': split_lines });
+      jquery__WEBPACK_IMPORTED_MODULE_4__("#transform").text(vector);
+      _kalman__WEBPACK_IMPORTED_MODULE_3__["update_position"](vector, orientation_events[imu_idx].time);
+      console.log(Date.now() / 1000 - orientation_events[imu_idx].time);
+
+      jquery__WEBPACK_IMPORTED_MODULE_4__("#error").text(error);
+      jquery__WEBPACK_IMPORTED_MODULE_4__("#offset").text(offset * 180 / Math.PI % 90);
+    }
+
+    dst.delete();
+  }
+}
+
+/***/ }),
+
+/***/ "./src/kalman.js":
+/*!***********************!*\
+  !*** ./src/kalman.js ***!
+  \***********************/
+/*! exports provided: setCallback, init, update_position, update_imu */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "setCallback", function() { return setCallback; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "init", function() { return init; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "update_position", function() { return update_position; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "update_imu", function() { return update_imu; });
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils */ "./src/utils.js");
+
+
+var P;
+var x;
+var t_last = Date.now() / 1000;
+
+let q = .25;
+
+let position_stddev = .04; // meters
+let acc_stddev = .1;
+let meters_per_foot = .3048;
+
+var position_initialized = false;
+
+var callback = () => {};
+
+function setCallback(f) {
+        callback = f;
+}
+
+function init() {
+        P = [cv.Mat.eye(3, 3, cv.CV_32F), cv.Mat.eye(3, 3, cv.CV_32F), cv.Mat.eye(3, 3, cv.CV_32F)];
+        x = [cv.Mat.zeros(3, 1, cv.CV_32F), cv.Mat.zeros(3, 1, cv.CV_32F), cv.Mat.zeros(3, 1, cv.CV_32F)];
+        position_initialized = false;
+}
+
+function update_position(vector, time) {
+        position_initialized = true;
+        var dt = time - t_last;
+        console.log("pos", dt);
+        t_last = time;
+
+        let A = cv.matFromArray(3, 3, cv.CV_32F, [1, dt, .5 * dt * dt, 0, 1, dt, 0, 0, 1]);
+        let H = cv.matFromArray(1, 3, cv.CV_32F, [1, 0, 0]);
+
+        let Q = cv.matFromArray(3, 3, cv.CV_32F, [dt * dt * dt * dt / 4, dt * dt * dt / 2, dt * dt / 2, dt * dt * dt / 2, dt * dt, dt, dt * dt / 2, dt, 1].map(x => x * q));
+
+        let R = cv.matFromArray(1, 1, cv.CV_32F, [position_stddev * position_stddev]);
+        for (var j = 0; j < 3; ++j) {
+
+                var x_pred = _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](A, x[j]);
+
+                var offset = x_pred.data32F[0] - vector[j] * 2 * meters_per_foot;
+
+                while (Math.abs(offset) > .5 * 2 * meters_per_foot && j != 2) {
+                        vector[j] += Math.sign(offset);
+                        offset = x_pred.data32F[0] - vector[j] * 2 * meters_per_foot;
+                }
+
+                var p_pred = _utils__WEBPACK_IMPORTED_MODULE_0__["add"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](A, P[j]), A.t()), Q);
+
+                var y_tilde = _utils__WEBPACK_IMPORTED_MODULE_0__["sub"](cv.matFromArray(1, 1, cv.CV_32F, [vector[j] * 2 * meters_per_foot]), _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](H, x_pred));
+
+                var S = _utils__WEBPACK_IMPORTED_MODULE_0__["add"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](H, p_pred), H.t()), R);
+
+                var K = _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](p_pred, H.t()), S.inv(cv.DECOMP_LU));
+
+                x[j] = _utils__WEBPACK_IMPORTED_MODULE_0__["add"](x_pred, _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](K, y_tilde));
+
+                P[j] = _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["sub"](cv.Mat.eye(3, 3, cv.CV_32F), _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](K, H)), p_pred);
+        }
+        //callback(x)
+}
+
+function update_imu(orientation, acceleration, imu_yaw_delta, time) {
+        if (!x || !orientation || !imu_yaw_delta || !position_initialized) {
+                return;
+        }
+        var acc = world_acc(orientation, acceleration, imu_yaw_delta);
+
+        var dt = time - t_last;
+        console.log("acc", dt);
+        t_last = time;
+
+        let A = cv.matFromArray(3, 3, cv.CV_32F, [1, dt, .5 * dt * dt, 0, 1, dt, 0, 0, 1]);
+        let H = cv.matFromArray(1, 3, cv.CV_32F, [0, 0, 1]);
+
+        let Q = cv.matFromArray(3, 3, cv.CV_32F, [dt * dt * dt * dt / 4, dt * dt * dt / 2, dt * dt / 2, dt * dt * dt / 2, dt * dt, dt, dt * dt / 2, dt, 1].map(x => x * q));
+
+        let R = cv.matFromArray(1, 1, cv.CV_32F, [acc_stddev * acc_stddev]);
+        for (var j = 0; j < 3; ++j) {
+
+                var x_pred = _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](A, x[j]);
+
+                var p_pred = _utils__WEBPACK_IMPORTED_MODULE_0__["add"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](A, P[j]), A.t()), Q);
+
+                var y_tilde = _utils__WEBPACK_IMPORTED_MODULE_0__["sub"](cv.matFromArray(1, 1, cv.CV_32F, [acc.data32F[j]]), _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](H, x_pred));
+
+                var S = _utils__WEBPACK_IMPORTED_MODULE_0__["add"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](H, p_pred), H.t()), R);
+
+                var K = _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](p_pred, H.t()), S.inv(cv.DECOMP_LU));
+
+                x[j] = _utils__WEBPACK_IMPORTED_MODULE_0__["add"](x_pred, _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](K, y_tilde));
+
+                P[j] = _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](_utils__WEBPACK_IMPORTED_MODULE_0__["sub"](cv.Mat.eye(3, 3, cv.CV_32F), _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](K, H)), p_pred);
+        }
+        callback(x);
+}
+
+function world_acc(orientation, acceleration, imu_yaw_delta) {
+
+        var sin = Math.sin;
+        var cos = Math.cos;
+        var a = -orientation.beta / 180 * Math.PI;
+        var b = -orientation.gamma / 180 * Math.PI;
+        var c = -orientation.alpha / 180 * Math.PI + imu_yaw_delta;
+        var rotmat = cv.matFromArray(3, 3, cv.CV_32F, [sin(a) * sin(b) * sin(c) + cos(b) * cos(c), sin(a) * sin(b) * cos(c) - sin(c) * cos(b), sin(b) * cos(a), sin(c) * cos(a), cos(a) * cos(c), -sin(a), sin(a) * sin(c) * cos(b) - sin(b) * cos(c), sin(a) * cos(b) * cos(c) + sin(b) * sin(c), cos(a) * cos(b)]).inv(cv.DECOMP_LU);
+
+        return _utils__WEBPACK_IMPORTED_MODULE_0__["matmul"](rotmat, cv.matFromArray(3, 1, cv.CV_32F, [-acceleration.x, -acceleration.y, -acceleration.z]));
+        //return cv.matFromArray(3, 1, cv.CV_32F, [-acceleration.x, -acceleration.y, -acceleration.z])
+
+}
+
+/***/ }),
+
+/***/ "./src/main.js":
+/*!*********************!*\
+  !*** ./src/main.js ***!
+  \*********************/
+/*! no exports provided */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var jquery__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! jquery */ "./node_modules/jquery/dist/jquery.js");
+/* harmony import */ var jquery__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(jquery__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _kalman__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./kalman */ "./src/kalman.js");
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./utils */ "./src/utils.js");
+/* harmony import */ var _gridslam__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./gridslam */ "./src/gridslam.js");
+
+
+
+
+
+
+var sessionid = Math.round(90000 * Math.random());
+var recording = false;
+function submitPhoto() {
+  var context = document.getElementById("cameraframe").getContext("2d");
+
+  context.drawImage(window.webcam.webcamElement, 0, 0, 512, 512);
+  jquery__WEBPACK_IMPORTED_MODULE_0__["ajax"]({
+    type: "POST",
+    url: "http://ec2-18-188-175-17.us-east-2.compute.amazonaws.com:4000/imageupload/" + (Math.random() + sessionid),
+    data: {
+      image: document.getElementById("cameraframe").toDataURL('image/png')
+    }
+
+  });
+  if (recording) {
+    setTimeout(submitPhoto, 300);
+  }
+}
+
+async function init() {
+  //screen.lockOrientationUniversal = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation;
+  //screen.lockOrientationUniversal("portrait-primary")
+
+
+  await _gridslam__WEBPACK_IMPORTED_MODULE_3__["init"]();
+
+  _kalman__WEBPACK_IMPORTED_MODULE_1__["setCallback"](x => {
+
+    var input_shape = _gridslam__WEBPACK_IMPORTED_MODULE_3__["input_shape"];
+
+    window.trackingctx = document.getElementById("tracking").getContext("2d");
+
+    window.trackingctx.fillStyle = "rgba(255,255,255,1)";
+    window.trackingctx.fillRect(0, 0, input_shape, input_shape);
+    window.trackingctx.fillStyle = "rgba(255,0,0,1)";
+    window.trackingctx.fillRect(input_shape * _utils__WEBPACK_IMPORTED_MODULE_2__["mod1"](x[0].data32F[0]), input_shape - input_shape * _utils__WEBPACK_IMPORTED_MODULE_2__["mod1"](x[1].data32F[0]), 4, 4);
+  });
+  jquery__WEBPACK_IMPORTED_MODULE_0__('#save').click(function () {
+    jquery__WEBPACK_IMPORTED_MODULE_0__["ajax"]({
+      type: 'POST',
+      contentType: 'application/json; charset=utf-8',
+      url: '/uploadtrack',
+      data: JSON.stringify({
+        "orientation_events": _gridslam__WEBPACK_IMPORTED_MODULE_3__["orientation_events"],
+        "acceleration_events": _gridslam__WEBPACK_IMPORTED_MODULE_3__["acceleration_events"],
+        "transforms": window.transforms,
+        "imu_yaw2grid_yaw_delta": _gridslam__WEBPACK_IMPORTED_MODULE_3__["imu_yaw2grid_yaw_delta"]
+      }),
+      datatype: 'json'
+    });
+    // events = []
+  });
+  jquery__WEBPACK_IMPORTED_MODULE_0__('#resetMap').click(_gridslam__WEBPACK_IMPORTED_MODULE_3__["resetMap"]);
+
+  function clickrun() {
+    _gridslam__WEBPACK_IMPORTED_MODULE_3__["setRunning"](!_gridslam__WEBPACK_IMPORTED_MODULE_3__["running"]);
+    jquery__WEBPACK_IMPORTED_MODULE_0__("#runmodel").text(_gridslam__WEBPACK_IMPORTED_MODULE_3__["running"] ? "Stop Model" : "Run Model");
+    if (_gridslam__WEBPACK_IMPORTED_MODULE_3__["running"]) {
+
+      _gridslam__WEBPACK_IMPORTED_MODULE_3__["runmodel"]();
+    }
+  }
+  jquery__WEBPACK_IMPORTED_MODULE_0__('#runmodel').click(clickrun);
+
+  jquery__WEBPACK_IMPORTED_MODULE_0__('#runonce').click(function () {
+    _gridslam__WEBPACK_IMPORTED_MODULE_3__["runmodel"]();
+  });
+
+  jquery__WEBPACK_IMPORTED_MODULE_0__('#stopmodel').click(function () {
+    _gridslam__WEBPACK_IMPORTED_MODULE_3__["running"] = false;
+  });
+  jquery__WEBPACK_IMPORTED_MODULE_0__('#submit').click(function () {
+    recording = !recording;
+    window.webcam.webcamElement.width = recording ? 512 : _gridslam__WEBPACK_IMPORTED_MODULE_3__["input_shape"];
+    window.webcam.webcamElement.height = window.webcam.webcamElement.width;
+
+    jquery__WEBPACK_IMPORTED_MODULE_0__('#submit').text(recording ? "Stop Recording" : "Record and Upload");
+    if (recording) {
+      submitPhoto();
+    }
+  });
+
+  function checkLoadingDone() {
+    try {
+      if (cv.Mat && window.webcam) {
+        jquery__WEBPACK_IMPORTED_MODULE_0__(".loading-fade").hide();
+        jquery__WEBPACK_IMPORTED_MODULE_0__(".loading-msg").hide();
+        _kalman__WEBPACK_IMPORTED_MODULE_1__["init"]();
+        clickrun();
+      } else {
+        setTimeout(checkLoadingDone, 130);
+      }
+    } catch (err) {
+      setTimeout(checkLoadingDone, 130);
+    }
+  }
+  setTimeout(checkLoadingDone, 50);
+}
+
+function initAwait() {
+  init();
+}
+cv['onRuntimeInitialized'] = initAwait;
+
+/***/ }),
+
+/***/ "./src/utils.js":
+/*!**********************!*\
+  !*** ./src/utils.js ***!
+  \**********************/
+/*! exports provided: matmul, add, sub, intersection, drawLines, drawLinesJ, mat32FToArray, project_points, mod1, distance */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "matmul", function() { return matmul; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "add", function() { return add; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "sub", function() { return sub; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "intersection", function() { return intersection; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "drawLines", function() { return drawLines; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "drawLinesJ", function() { return drawLinesJ; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "mat32FToArray", function() { return mat32FToArray; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "project_points", function() { return project_points; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "mod1", function() { return mod1; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "distance", function() { return distance; });
+
+function matmul(A, B) {
+  let res = new cv.Mat();
+  cv.gemm(A, B, 1, cv.Mat.zeros(A.rows, B.cols, cv.CV_32F), 0, res, 0);
+  return res;
+}
+
+function add(A, B) {
+  let res = new cv.Mat();
+  let mask = new cv.Mat();
+  let dtype = -1;
+  cv.add(A, B, res, mask, dtype);
+  return res;
+}
+
+function sub(A, B) {
+  let res = new cv.Mat();
+  let mask = new cv.Mat();
+  let dtype = -1;
+  cv.subtract(A, B, res, mask, dtype);
+  return res;
+}
+
+function intersection(line1, line2) {
+  //Finds the intersection of two lines given in Hesse normal form.
+  //Returns closest integer pixel locations.
+  //See https://stackoverflow.com/a/383527/5087436
+
+  let rho1 = line1[0];
+  let theta1 = line1[1];
+  let rho2 = line2[0];
+  let theta2 = line2[1];
+  let A = cv.matFromArray(2, 2, cv.CV_32F, [Math.cos(theta1), Math.sin(theta1), Math.cos(theta2), Math.sin(theta2)]);
+  let b = cv.matFromArray(2, 1, cv.CV_32F, [rho1, rho2]);
+  //let res = new cv.Mat()
+  //cv.gemm(A.inv(cv.DECOMP_LU), b, 1, cv.matFromArray(2, 1, cv.CV_32F, [0, 0]), 0, res, 0)
+
+
+  return matmul(A.inv(cv.DECOMP_LU), b);
+}
+
+function drawLines(lines, mat, color) {
+  for (let i = 0; i < lines.rows; ++i) {
+    let rho = lines.data32F[i * 3];
+    let theta = lines.data32F[i * 3 + 1];
+    let a = Math.cos(theta);
+    let b = Math.sin(theta);
+    let x0 = a * rho;
+    let y0 = b * rho;
+    let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+    let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+    cv.line(mat, startPoint, endPoint, color);
+  }
+}
+function drawLinesJ(lines, mat, color) {
+  for (let i = 0; i < lines.length; ++i) {
+    let rho = lines[i][0];
+    let theta = lines[i][1];
+    let a = Math.cos(theta);
+    let b = Math.sin(theta);
+    let x0 = a * rho;
+    let y0 = b * rho;
+    let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+    let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+    cv.line(mat, startPoint, endPoint, color);
+  }
+}
+function mat32FToArray(mat) {
+  var res = [];
+  for (let i = 0; i < mat.rows; ++i) {
+    res.push([]);
+    for (let j = 0; j < mat.cols; ++j) {
+      res[i].push(mat.data32F[i * mat.cols + j]);
+    }
+  }
+  return res;
+}
+
 function project_points(vector, world_points) {
   var sin = Math.sin;
   var cos = Math.cos;
   var pi = Math.PI;
-  var height = 128;
-  var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight;
+  var height = input_shape;
+  var width = input_shape / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight;
 
   var x = vector[0];
   var y = vector[1];
@@ -48193,407 +48818,12 @@ function project_points(vector, world_points) {
   return screen_points;
 }
 
-function solve_minimum(vector, screen_points, world_points) {
-  var real_solution = { fx: 9999999 };
-  window.cnt = 0;
-  [0].forEach(yaw => {
-    vector = vector.slice();
-    var loss = make_error_params(vector, screen_points, world_points);
-    var solution = fmin.conjugateGradient(loss, [0, 0, -2.5, 0], { maxIterations: 300 }); // vector[0], vector[1], vector[2], vector[5]])
-    if (real_solution.fx > solution.fx) {
-      real_solution = solution;
-    }
-  });
-  console.log("iterations: ", window.cnt);
-  console.log(real_solution);
-  [[0, 0], [1, 1], [2, 2], [3, 5]].forEach(j => {
-    vector[j[1]] = real_solution.x[j[0]];
-  });
-  return { v: vector, error: real_solution.fx };
-}
-function sortlines(lines, reference) {
-  function value(line) {
-    return intersection(line, reference[0]).data32F[0];
-  }
-  return lines.sort((a, b) => value(a) - value(b));
-}
-
 function mod1(x) {
   return (x % 1 + 1) % 1;
 }
 function distance(p1, p2) {
   return Math.sqrt((p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1]));
 }
-function embed(l) {
-  return [Math.sin(2 * l[1]), Math.cos(2 * l[1])];
-}
-function split(lines) {
-  //window.trackingctx = document.getElementById("tracking").getContext("2d")
-
-
-  clustermaker.k(2);
-  clustermaker.iterations(209);
-  var data = [];
-  lines.forEach(l => {
-    data.push(embed(l));
-    //the following is horrible, but avoids singularities in the GMM code I'm using
-    /*gmm.addPoint(embed(l))
-    gmm.addPoint([embed(l)[0], embed(l)[1] + .03])
-    gmm.addPoint([embed(l)[0] + .03, embed(l)[1]])*/
-  });
-  clustermaker.data(data);
-  var res = clustermaker.clusters();
-  //gmm.runEM(7)
-  var lines1 = [];
-  var lines2 = [];
-  //window.trackingctx.fillStyle = "rgba(255,255,255,1)"
-  //        window.trackingctx.fillRect(0, 0, 128, 128)
-  lines.forEach(l => {
-    //if(gmm.predictNormalize(embed(l))[0] > .5){
-    if (distance(embed(l), res[0].centroid) < distance(embed(l), res[1].centroid)) {
-      lines1.push(l);
-
-      //window.trackingctx.fillStyle = "rgba(255,0,0,1)"
-      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
-    } else {
-      lines2.push(l);
-      //window.trackingctx.fillStyle = "rgba(0,255,0,1)"
-      //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
-    }
-  });
-  return [lines1, lines2];
-}
-var imu_yaw2grid_yaw_delta;
-window.prune_strat = "mostvotes";
-function getlines(array, imu_idx) {
-  window.mat = cv.matFromArray(128, 128, cv.CV_32F, array);
-  var gr = new cv.Mat();
-  mat.convertTo(mat, cv.CV_8UC1);
-  cv.threshold(mat, gr, .5, 256, cv.THRESH_BINARY_INV);
-  window.gr = gr;
-  var skele = cv.Mat.zeros(128, 128, cv.CV_8UC1);
-  var temp = cv.Mat.zeros(128, 128, cv.CV_8UC1);
-  var elem = cv.getStructuringElement(cv.MORPH_CROSS, new cv.Size(3, 3));
-  var i;
-  for (i = 0; i < 7; i++) {
-    cv.morphologyEx(gr, temp, cv.MORPH_OPEN, elem);
-    cv.bitwise_not(temp, temp);
-    cv.bitwise_and(gr, temp, temp);
-    cv.bitwise_or(skele, temp, skele);
-    cv.erode(gr, gr, elem);
-  }
-
-  cv.imshow('skeleton', skele);
-  mat.delete();gr.delete();temp.delete();
-  let dst = cv.Mat.zeros(skele.rows, skele.cols, cv.CV_8UC3);
-  let lines = new cv.Mat();
-
-  cv.HoughLines(skele, lines, 1, Math.PI / 180, 27, 0, 0, 0, Math.PI);
-  drawLines(lines, dst, [76, 0, 0, 255]);
-  if (lines.rows < 2) {
-    cv.imshow('lines', dst);
-    dst.delete();
-    return;
-  }
-
-  var lineDistMat = [];
-  for (let i = 0; i < lines.rows; ++i) {
-    lineDistMat.push([]);
-    for (let j = 0; j < lines.rows; ++j) {
-      var rho1 = lines.data32F[i * 3];
-      var theta1 = lines.data32F[i * 3 + 1];
-
-      let rho2 = lines.data32F[j * 3];
-      let theta2 = lines.data32F[j * 3 + 1];
-
-      let distance1 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2));
-      rho1 = rho1 * -1;
-      theta1 = theta1 - Math.PI;
-      let distance2 = Math.sqrt((rho1 - rho2) * (rho1 - rho2) / (100 * 100) + (theta1 - theta2) * (theta1 - theta2));
-      //console.log(distance1, distance2, rho1, theta1)
-      lineDistMat[i].push(Math.max(-distance1, -distance2));
-    }
-  }
-  //console.table(lineDistMat)
-  var cluster_result = affinity_propagation__WEBPACK_IMPORTED_MODULE_3__["getClusters"](lineDistMat, { preference: window.preference, damping: .5 });
-  console.log(cluster_result);
-  //console.table(lineDistMat)
-
-  if (cluster_result.exemplars.length > 1) {
-    var lines_pruned = [];
-    if (window.prune_strat == "mostvotes") {
-      var cluster_exemplar_lookup = [];
-
-      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-        cluster_exemplar_lookup[cluster_result.exemplars[j]] = j;
-        lines_pruned.push([0, 0, 0]);
-      }
-
-      for (let i = 0; i < lines.rows; ++i) {
-        var cluster_idx = cluster_exemplar_lookup[cluster_result.clusters[i]];
-
-        if (lines.data32F[i * 3 + 2] > lines_pruned[cluster_idx][2]) {
-          let rho = lines.data32F[i * 3];
-          let theta = lines.data32F[i * 3 + 1];
-          let score = lines.data32F[i * 3 + 2];
-
-          lines_pruned[cluster_idx] = [rho, theta, score];
-        }
-      }
-
-      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-
-        let rho = lines_pruned[j][0];
-        let theta = lines_pruned[j][1];
-        let a = Math.cos(theta);
-        let b = Math.sin(theta);
-        let x0 = a * rho;
-        let y0 = b * rho;
-        let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
-        let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
-        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
-      }
-    } else {
-
-      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-        let i = cluster_result.exemplars[j];
-        let rho = lines.data32F[i * 3];
-        let theta = lines.data32F[i * 3 + 1];
-        lines_pruned.push([rho, theta]);
-        let a = Math.cos(theta);
-        let b = Math.sin(theta);
-        let x0 = a * rho;
-        let y0 = b * rho;
-        let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
-        let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
-        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
-      }
-    }
-
-    /*let i1 = mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
-    let i2 = mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
-    console.log(i1)
-    cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
-
-    var split_lines = split(lines_pruned);
-
-    drawLinesJ(split_lines[0], dst, [0, 255, 0, 255]);
-    drawLinesJ(split_lines[1], dst, [255, 0, 255, 255]);
-
-    if (lines_pruned.length < 3) {
-      cv.imshow('lines', dst);
-      dst.delete();
-      return;
-    }
-
-    split_lines[0] = sortlines(split_lines[0], split_lines[1]);
-    split_lines[1] = sortlines(split_lines[1], split_lines[0]);
-
-    console.log(split_lines);
-
-    var world_points = [];
-    var screen_points = [];
-
-    for (var i = 0; i < split_lines[0].length; ++i) {
-      var l1 = split_lines[0][i];
-      for (var j = 0; j < split_lines[1].length; ++j) {
-        var l2 = split_lines[1][j];
-        var x = intersection(l1, l2);
-        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight];
-        screen_points.push(x);
-        world_points.push([i - 1, j - 1, 0]);
-      }
-    }
-
-    cv.imshow('lines', dst);
-    var imu = events[imu_idx];
-
-    var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma / 180 * Math.PI, -imu.alpha / 180 * Math.PI, 4 / 3 * 117];
-    var res = solve_minimum(vector, screen_points, world_points);
-
-    world_points = [];
-    screen_points = [];
-
-    for (var i = 0; i < split_lines[1].length; ++i) {
-      var l1 = split_lines[1][i];
-      for (var j = 0; j < split_lines[0].length; ++j) {
-        var l2 = split_lines[0][j];
-        var x = intersection(l1, l2);
-        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight];
-        screen_points.push(x);
-        world_points.push([i - 1, j - 1, 0]);
-      }
-    }
-
-    var res2 = solve_minimum(vector, screen_points, world_points);
-    var vector;
-    var error;
-    if (res2.error < res.error) {
-      vector = res2.v;
-      error = res2.error;
-    } else {
-      vector = res.v;
-      error = res.error;
-    }
-
-    var offset;
-    if (!run_once) {
-      imu_yaw2grid_yaw_delta = vector[5] + events[imu_idx].alpha / 180 * Math.PI;
-      console.log(imu_yaw2grid_yaw_delta);
-      run_once = true;
-    } else {
-      var correct_yaw_grid_coords = -events[imu_idx].alpha / 180 * Math.PI + imu_yaw2grid_yaw_delta;
-      offset = correct_yaw_grid_coords - vector[5];
-
-      var cos = Math.cos(offset);
-      var sin = Math.sin(offset);
-      var x = mod1(cos * vector[0] + sin * vector[1]);
-      var y = mod1(-sin * vector[0] + cos * vector[1]);
-      vector[0] = x;
-      vector[1] = y;
-      vector[5] = correct_yaw_grid_coords;
-    }
-
-    if (error < .04 * screen_points.length) {
-
-      jquery__WEBPACK_IMPORTED_MODULE_2__("#transform").text(vector);
-      events[imu_idx].transform = vector;
-      events[imu_idx].lines = split_lines;
-      jquery__WEBPACK_IMPORTED_MODULE_2__("#error").text(error);
-      jquery__WEBPACK_IMPORTED_MODULE_2__("#offset").text(offset * 180 / Math.PI % 90);
-
-      window.trackingctx = document.getElementById("tracking").getContext("2d");
-
-      window.trackingctx.fillStyle = "rgba(255,255,255,1)";
-      window.trackingctx.fillRect(0, 0, 128, 128);
-      window.trackingctx.fillStyle = "rgba(255,0,0,1)";
-      window.trackingctx.fillRect(128 * x, 128 - 128 * y, 4, 4);
-    }
-
-    dst.delete();
-  }
-}
-
-window.preference = -.6;
-var sessionid = Math.round(90000 * Math.random());
-var recording = false;
-function submitPhoto() {
-  var context = document.getElementById("cameraframe").getContext("2d");
-
-  context.drawImage(window.webcam.webcamElement, 0, 0, 512, 512);
-  jquery__WEBPACK_IMPORTED_MODULE_2__["ajax"]({
-    type: "POST",
-    url: "http://ec2-18-188-175-17.us-east-2.compute.amazonaws.com:4000/imageupload/" + (Math.random() + sessionid),
-    data: {
-      image: document.getElementById("cameraframe").toDataURL('image/png')
-    }
-
-  });
-  if (recording) {
-    setTimeout(submitPhoto, 300);
-  }
-}
-
-async function init() {
-  //screen.lockOrientationUniversal = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation;
-  //screen.lockOrientationUniversal("portrait-primary")
-  log('document.load happened');
-
-  window.model = await _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__["loadModel"]('/webgrid/static/tfjs_dir/model.json');
-
-  log('model loaded');
-
-  window.webcam = new _webcam__WEBPACK_IMPORTED_MODULE_1__["Webcam"](document.getElementById('player'));
-
-  await window.webcam.setup();
-
-  window.webcam.webcamElement.width = 128;
-  window.webcam.webcamElement.height = 128;
-
-  log('Webcam setup');
-
-  window.events = [];
-  /*
-  $('#save').click(function () {
-    $.ajax({
-      type: 'POST',
-      contentType: 'application/json; charset=utf-8',
-      url: '/upload',
-      data: JSON.stringify(window.events),
-      datatype: 'json'
-    })
-    // events = []
-  })
-  */
-  function clickrun() {
-    running = !running;
-    jquery__WEBPACK_IMPORTED_MODULE_2__("#runmodel").text(running ? "Stop Model" : "Run Model");
-    if (running) {
-
-      runmodel();
-    }
-  }
-  jquery__WEBPACK_IMPORTED_MODULE_2__('#runmodel').click(clickrun);
-
-  jquery__WEBPACK_IMPORTED_MODULE_2__('#runonce').click(function () {
-    runmodel();
-  });
-
-  jquery__WEBPACK_IMPORTED_MODULE_2__('#stopmodel').click(function () {
-    running = false;
-  });
-  jquery__WEBPACK_IMPORTED_MODULE_2__('#submit').click(function () {
-    recording = !recording;
-    window.webcam.webcamElement.width = recording ? 512 : 128;
-    window.webcam.webcamElement.height = window.webcam.webcamElement.width;
-
-    jquery__WEBPACK_IMPORTED_MODULE_2__('#submit').text(recording ? "Stop Recording" : "Record and Upload");
-    if (recording) {
-      submitPhoto();
-    }
-  });
-
-  if (window.DeviceOrientationEvent) {
-    log('registering event');
-    window.addEventListener('deviceorientation', function (evt) {
-      window.events.push({
-        time: Date.now() / 1000,
-        alpha: evt.alpha,
-        beta: evt.beta,
-        gamma: evt.gamma
-      });
-      jquery__WEBPACK_IMPORTED_MODULE_2__('#alpha').text(evt.alpha);
-      jquery__WEBPACK_IMPORTED_MODULE_2__('#beta').text(evt.beta);
-      jquery__WEBPACK_IMPORTED_MODULE_2__('#gamma').text(evt.gamma);
-      jquery__WEBPACK_IMPORTED_MODULE_2__('#webkit').text(evt.webkitCompassHeading);
-    });
-  } else {
-    jquery__WEBPACK_IMPORTED_MODULE_2__('log').append('No DeviceOrientationEvent');
-  }
-  function checkLoadingDone() {
-    if (cv.Mat) {
-      jquery__WEBPACK_IMPORTED_MODULE_2__(".loading-fade").hide();
-      jquery__WEBPACK_IMPORTED_MODULE_2__(".loading-msg").hide();
-      clickrun();
-    } else setTimeout(checkLoadingDone, 130);
-  }
-  setTimeout(checkLoadingDone, 130);
-
-  /* const player = document.getElementById('player')
-        const constraints = {
-        video: true,
-      };
-        navigator.mediaDevices.getUserMedia(constraints)
-        .then((stream) => {
-          player.srcObject = stream;
-        });
-       */
-}
-
-function initAwait() {
-  init();
-}
-window.onload = initAwait;
 
 /***/ }),
 
