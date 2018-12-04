@@ -44,7 +44,11 @@ async function init () {
       window.trackingctx.fillStyle = "rgba(255,255,255,1)"
       window.trackingctx.fillRect(0, 0, input_shape, input_shape)
       window.trackingctx.fillStyle = "rgba(255,0,0,1)"
-      window.trackingctx.fillRect(input_shape * utils.mod1(x[0].data32F[0]), input_shape - input_shape * utils.mod1(x[1].data32F[0]), 4, 4)
+      window.trackingctx.fillRect(
+        input_shape * utils.mod1(x[0].data32F[0]), 
+        input_shape - input_shape * utils.mod1(x[1].data32F[0]),
+        4, 4
+      )
 
 
   })
@@ -101,7 +105,7 @@ async function init () {
         $(".loading-fade").hide()
         $(".loading-msg").hide()
         kalman.init()
-        clickrun()
+        setTimeout(clickrun, 130)
       } else {
         setTimeout(checkLoadingDone, 130)
       }

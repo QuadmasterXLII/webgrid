@@ -404,7 +404,8 @@ function getlines (array, imu_idx) {
     var imu = orientation_events[imu_idx] || {
         alpha: 0,
         beta: 0,
-        gamma: 0
+        gamma: 0, 
+        time: Date.now() / 1000
       }
     var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma/ 180 * Math.PI, -imu.alpha/ 180 * Math.PI, (4/3) * 117]
     var res = solve_minimum(vector, screen_points, world_points)
@@ -457,10 +458,14 @@ function getlines (array, imu_idx) {
 
     }  
     if (error < .1 * screen_points.length){
-      window.transforms.push({'imu_idx': imu_idx, 'transform': vector, 'lines': split_lines})
+      window.transforms.push({
+        'imu_idx': imu_idx,
+        'transform': vector,
+        'lines': split_lines
+      })
       $("#transform").text(vector)
-      kalman.update_position(vector, orientation_events[imu_idx].time)
-      console.log(Date.now() / 1000 - orientation_events[imu_idx].time)
+      kalman.update_position(vector, imu.time)
+      //console.log(Date.now() / 1000 - orientation_events[imu_idx].time)
     
       $("#error").text(error)
       $("#offset").text((offset * 180 / Math.PI) % 90)
