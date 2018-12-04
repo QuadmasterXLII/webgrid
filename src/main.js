@@ -30,7 +30,7 @@ async function init () {
   //screen.lockOrientationUniversal("portrait-primary")
   
   
-  gridslam.init()
+  await gridslam.init()
 
   kalman.setCallback ( (x) => {
       
@@ -94,13 +94,19 @@ async function init () {
 
   
   function checkLoadingDone() {
-    if(cv.Mat && window.webcam){
-      $(".loading-fade").hide()
-      $(".loading-msg").hide()
-      kalman.init()
-      clickrun()
+    try {
+      if(cv.Mat && window.webcam){
+        $(".loading-fade").hide()
+        $(".loading-msg").hide()
+        kalman.init()
+        clickrun()
+      } else {
+        setTimeout(checkLoadingDone, 130)
+      }
     }
-    else setTimeout(checkLoadingDone, 130)
+    catch (err) {
+      setTimeout(checkLoadingDone, 130)
+    }
   }
   setTimeout(checkLoadingDone, 50)
   

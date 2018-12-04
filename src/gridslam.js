@@ -69,7 +69,7 @@ export function setRunning(r){
 export async function runmodel () {
   
   var imu_idx = orientation_events.length - 1
-  console.log("Error:, ", Date.now() / 1000 - orientation_events[imu_idx].time) 
+  //console.log("Error:, ", Date.now() / 1000 - orientation_events[imu_idx].time) 
   var output = tf.tidy(() => {
     var image = window.webcam.capture()
     window.image = image
@@ -456,7 +456,7 @@ function getlines (array, imu_idx) {
       vector[5] = correct_yaw_grid_coords
 
     }  
-    if (error < .04 * screen_points.length){
+    if (error < .1 * screen_points.length){
       window.transforms.push({'imu_idx': imu_idx, 'transform': vector, 'lines': split_lines})
       $("#transform").text(vector)
       kalman.update_position(vector, orientation_events[imu_idx].time)
