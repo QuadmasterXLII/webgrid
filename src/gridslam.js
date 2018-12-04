@@ -1,31 +1,27 @@
 import * as tf from '@tensorflow/tfjs'
 import { Webcam } from './webcam'
+import * as utils from "./utils"
+import * as kalman from "./kalman"
 import * as $ from 'jquery'
 import * as apclust from 'affinity-propagation'
-
 var clustermaker = require("clusters")
 var fmin = require("fmin")
 
-
+export let input_shape = 128
 
 export var orientation_events = []
 export var acceleration_events = []
 window.transforms = []
 export async function init() {
-  
 
   window.model = await tf.loadModel('/static/tfjs_dir/model.json')
-
-  
+ 
   window.webcam = new Webcam(document.getElementById('player'))
 
   await window.webcam.setup()
 
-  window.webcam.webcamElement.width = 128
-  window.webcam.webcamElement.height = 128
-
-
-
+  window.webcam.webcamElement.width = input_shape
+  window.webcam.webcamElement.height = input_shape
 
   if (window.DeviceOrientationEvent) {
     
@@ -51,6 +47,10 @@ export async function init() {
         y: evt.acceleration.y,
         z: evt.acceleration.z
       })
+      //setTimeout(()=> {
+        kalman.update_imu(orientation_events[orientation_events.length - 1],
+          acceleration_events[acceleration_events.length - 1], imu_yaw2grid_yaw_delta, Date.now() / 1000)
+      //}, 200)
       
       $('#alpha').text(evt.acceleration.x)
       $('#beta').text(evt.acceleration.y)
@@ -60,27 +60,26 @@ export async function init() {
   } else {
     console.log('No DeviceOrientationEvent')
   }
+  kalman.init()
 } 
 export var running = false
 export function setRunning(r){
   running = r
 }
 export async function runmodel () {
- 
-  var imu_idx = orientation_events.length - 1 
+  
+  var imu_idx = orientation_events.length - 1
+  console.log("Error:, ", Date.now() / 1000 - orientation_events[imu_idx].time) 
   var output = tf.tidy(() => {
     var image = window.webcam.capture()
     window.image = image
  
     var output = window.model.predict(image)
 
-    output = tf.reshape(output, [128, 128, 2])
-
-    //window.output = output
-
+    output = tf.reshape(output, [input_shape, input_shape, 2])
     //output = tf.concat([output, tf.add(1, tf.mul(-0.001, output))], 2)
 
-    return output.add(-0.5).mul(3000).clipByValue(0, 1).slice([0, 0, 1], [128, 128, 1])
+    return output.add(-0.5).mul(3000).clipByValue(0, 1).slice([0, 0, 1], [input_shape, input_shape, 1])
   })
   //tf.toPixels(output, document.getElementById('segmentation'))
   //log('done')
@@ -95,115 +94,6 @@ export async function runmodel () {
   }, 0)
 }
 
-function intersection(line1, line2){
-    //Finds the intersection of two lines given in Hesse normal form.
-    //Returns closest integer pixel locations.
-    //See https://stackoverflow.com/a/383527/5087436
-
-    let rho1 = line1[0]
-    let theta1 = line1[1]
-    let rho2 = line2[0]
-    let theta2 = line2[1]
-    let A = cv.matFromArray(2, 2, cv.CV_32F, [
-        Math.cos(theta1), Math.sin(theta1),
-        Math.cos(theta2), Math.sin(theta2)
-    ])
-    let b = cv.matFromArray(2, 1, cv.CV_32F, [rho1, rho2])
-    let res = new cv.Mat()
-    cv.gemm(A.inv(cv.DECOMP_LU), b, 1, cv.matFromArray(2, 1, cv.CV_32F, [0, 0]), 0, res, 0)
-    
-    return res
-}
-function drawLines(lines, mat, color) {
-    for (let i = 0; i < lines.rows; ++i) {
-    let rho = lines.data32F[i * 3];
-    let theta = lines.data32F[i * 3 + 1];
-    let a = Math.cos(theta);
-    let b = Math.sin(theta);
-    let x0 = a * rho;
-    let y0 = b * rho;
-    let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
-    let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
-    cv.line(mat, startPoint, endPoint, color);
-  }
-}
-function drawLinesJ(lines, mat, color) {
-  for (let i = 0; i < lines.length; ++i) {
-    let rho = lines[i][0];
-    let theta = lines[i][1];
-    let a = Math.cos(theta);
-    let b = Math.sin(theta);
-    let x0 = a * rho;
-    let y0 = b * rho;
-    let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
-    let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
-    cv.line(mat, startPoint, endPoint, color);
-  }
-}
-function mat32FToArray(mat) {
-  var res = []
-  for (let i = 0; i < mat.rows; ++i) {
-    res.push([])
-    for (let j = 0; j < mat.cols; ++j) {
-      res[i].push(mat.data32F[i * mat.cols + j])
-    }
-  }
-  return res
-}
-
-function project_points(vector, world_points){
-  var sin = Math.sin
-  var cos = Math.cos
-  var pi = Math.PI
-  var height = 128
-  var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
-
-  var x = vector[0]
-  var y = vector[1]
-  var z = vector[2]
-  var pitch =vector[3]
-  var roll = vector[4]
-  var yaw = vector[5]
-  var focallength = vector[6]
-
-  screen_points = []
-
-  let x0  =  sin(roll)
-  let x1  =  cos(pitch)
-  let x2  =  world_z*x1
-  let x3  =  x1*z
-  let x4  =  cos(roll)
-  let x5  =  cos(yaw)
-  let x6  =  x4*x5
-  let x7  =  sin(pitch)
-  let x8  =  sin(yaw)
-  let x9  =  x0*x8
-  let x10  =  x6 + x7*x9
-  let x11  =  x4*x8
-  let x12  =  x0*x5
-  let x13  =  -x11 + x12*x7
-  let x14  =  x6*x7 + x9
-  let x15  =  x11*x7 - x12
-  let x17  =  x1*x8
-  let x18  =  x1*x5
-  let x_19 = x*x15 + x14*y + x2*x4 + x3*x4
-
-
-  for(var i = 0; i < world_points.length; ++i) {
-    var world_point = world_points[i]
-    var world_x= world_point[0]
-    var world_y = world_point[1]
-    var world_z = world_point[2]
-
-    
-    let x16  =  focallength/(world_x*x15 + world_y*x14 + x_19)
-    screen_points.push([height/2 - x16*(world_x*x10 + world_y*x13 + x*x10 + x0*x2 + x0*x3 + x13*y), width/2 - x16*(world_x*x17 + world_y*x18 - world_z*x7 + x*x17 + x18*y - x7*z)])
-
-  }
-  return screen_points
-}
-
-
 let error_scale = 100
 var iter_count = 0
 function make_error_params(vector, screen_points, world_points){
@@ -216,8 +106,8 @@ function make_error_params(vector, screen_points, world_points){
     var sin = Math.sin
     var cos = Math.cos
     var pi = Math.PI
-    var height = 128
-    var width = 128 / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
+    var height = input_shape
+    var width = input_shape / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
     
     fprime = fprime || [0, 0, 0, 0]
     for(var j=0; j < 4; j++){
@@ -287,10 +177,6 @@ function make_error_params(vector, screen_points, world_points){
       let x37 = -world_x*x16 - world_y*x30 - x*x16 - x30*y
       let x38 = -x14 - x24
 
-      
-      
-
-
       fprime[0] += (x23*(-x1*x29 - x30*x32) + x28*(-x25*x33 - x30*x34) ) / error_scale
       fprime[1] += (x23*(-x29*x4 - x32*x35) + x28*(-x26*x33 - x34*x35)) / error_scale
       fprime[2] += (x23*(x0*x33 + x32*x36) + x28*(-x12*x29 + x34*x36)) / error_scale
@@ -327,52 +213,37 @@ function solve_minimum(vector, screen_points, world_points) {
 }
 function sortlines(lines, reference) {
   function value(line){
-    return intersection(line, reference[0]).data32F[0]
+    return utils.intersection(line, reference[0]).data32F[0]
   }
   return lines.sort((a, b) => value(a) - value(b))
 }
 
-function mod1(x) {
-  return (x % 1 + 1) % 1
-}
-function distance(p1, p2){
-  return Math.sqrt((p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1]))
-}
 function embed(l){
   return [Math.sin(2 * l[1]), Math.cos(2 * l[1])]
 }  
 function split(lines) {
   //window.trackingctx = document.getElementById("tracking").getContext("2d")
-
-
   clustermaker.k(2)
   clustermaker.iterations(209)
   var data = []
   lines.forEach(l => {
     data.push(embed(l))
-    
-
   })
   clustermaker.data(data)
   var res = clustermaker.clusters()
-  //gmm.runEM(7)
   var lines1 = []
   var lines2 = []
   //window.trackingctx.fillStyle = "rgba(255,255,255,1)"
-  //        window.trackingctx.fillRect(0, 0, 128, 128)
+  //        window.trackingctx.fillRect(0, 0, input_shape, input_shape)
   lines.forEach(l => {
-    //if(gmm.predictNormalize(embed(l))[0] > .5){
-    if(distance(embed(l), res[0].centroid) < distance(embed(l), res[1].centroid)) {
+    if(utils.distance(embed(l), res[0].centroid) < utils.distance(embed(l), res[1].centroid)) {
       lines1.push(l)
-
       //window.trackingctx.fillStyle = "rgba(255,0,0,1)"
       //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
-
     } else {
       lines2.push(l)
       //window.trackingctx.fillStyle = "rgba(0,255,0,1)"
       //window.trackingctx.fillRect(64  + 32 * embed(l)[0], 64 + 32 * embed(l)[1], 2, 2)
-
     }
     
   })
@@ -380,21 +251,25 @@ function split(lines) {
 
 }
 
-var imu_yaw2grid_yaw_delta
+export var imu_yaw2grid_yaw_delta
 var has_run_once = false
 export function resetMap() {
   has_run_once = false
   window.transforms = []
+  acceleration_events = []
+  orientation_events = []
+  kalman.init()
+
 }
 window.prune_strat = "mostvotes"
 function getlines (array, imu_idx) {
-  window.mat = cv.matFromArray(128, 128, cv.CV_32F, array)
+  window.mat = cv.matFromArray(input_shape, input_shape, cv.CV_32F, array)
   var gr = new cv.Mat()
   mat.convertTo(mat, cv.CV_8UC1)
   cv.threshold(mat, gr, .5, 256, cv.THRESH_BINARY_INV)
   window.gr = gr
-  var skele = cv.Mat.zeros(128, 128, cv.CV_8UC1)
-  var temp = cv.Mat.zeros(128, 128, cv.CV_8UC1)
+  var skele = cv.Mat.zeros(input_shape, input_shape, cv.CV_8UC1)
+  var temp = cv.Mat.zeros(input_shape, input_shape, cv.CV_8UC1)
   var elem = cv.getStructuringElement(cv.MORPH_CROSS, new cv.Size(3, 3))
   var i
   for (i = 0; i < 7; i++) {
@@ -412,7 +287,7 @@ function getlines (array, imu_idx) {
 
   cv.HoughLines(skele, lines, 1, Math.PI / 180,
               27, 0, 0, 0, Math.PI);
-  drawLines(lines, dst, [76, 0, 0, 255])
+  utils.drawLines(lines, dst, [76, 0, 0, 255])
   if (lines.rows < 2){
     cv.imshow('lines', dst);
     dst.delete()
@@ -437,10 +312,9 @@ function getlines (array, imu_idx) {
       lineDistMat[i].push(Math.max(-distance1, -distance2))
     }
   }
-  //console.table(lineDistMat)
+
   var preference = -.6;
   var cluster_result = apclust.getClusters(lineDistMat, {preference:preference, damping:.5})
-  //console.table(lineDistMat)
   
   if (cluster_result.exemplars.length > 1){
     var lines_pruned = []
@@ -462,11 +336,8 @@ function getlines (array, imu_idx) {
            
            lines_pruned[cluster_idx] = [rho, theta, score]
         }
-
       }
-      
-      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-        
+      for (let j = 0; j < cluster_result.exemplars.length; ++j) {     
         let rho = lines_pruned[j][0];
         let theta = lines_pruned[j][1];
         let a = Math.cos(theta);
@@ -477,10 +348,7 @@ function getlines (array, imu_idx) {
         let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
         cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
       }
-
     } else {
-
-
       for (let j = 0; j < cluster_result.exemplars.length; ++j) {
         let i = cluster_result.exemplars[j]
         let rho = lines.data32F[i * 3];
@@ -496,20 +364,15 @@ function getlines (array, imu_idx) {
       }
     }
 
-    /*let i1 = mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
-    let i2 = mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
+    /*let i1 = utils.mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
+    let i2 = utils.mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
     console.log(i1)
     cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
 
-
-    
-
-
     var split_lines = split(lines_pruned)
 
-
-    drawLinesJ(split_lines[0], dst, [0, 255, 0, 255])
-    drawLinesJ(split_lines[1], dst, [255, 0, 255, 255])
+    utils.drawLinesJ(split_lines[0], dst, [0, 255, 0, 255])
+    utils.drawLinesJ(split_lines[1], dst, [255, 0, 255, 255])
 
     if (lines_pruned.length < 3){
       cv.imshow('lines', dst);
@@ -529,7 +392,7 @@ function getlines (array, imu_idx) {
       var l1 = split_lines[0][i]
       for( var j = 0; j < split_lines[1].length; ++j) {
         var l2 = split_lines[1][j]
-        var x = intersection(l1, l2)
+        var x = utils.intersection(l1, l2)
         x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight]
         screen_points.push(x)
         world_points.push([i - 1, j - 1, 0])
@@ -553,7 +416,7 @@ function getlines (array, imu_idx) {
       var l1 = split_lines[1][i]
       for( var j = 0; j < split_lines[0].length; ++j) {
         var l2 = split_lines[0][j]
-        var x = intersection(l1, l2)
+        var x = utils.intersection(l1, l2)
         x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight]
         screen_points.push(x)
         world_points.push([i - 1, j - 1, 0])
@@ -572,8 +435,6 @@ function getlines (array, imu_idx) {
       error = res.error
     }
 
-    
-      
     var offset
     if (!has_run_once) {
       if (split_lines[0].length == 1 || split_lines[1].length == 1 ){
@@ -588,43 +449,24 @@ function getlines (array, imu_idx) {
 
       var cos = Math.cos(offset)
       var sin = Math.sin(offset)
-      var x = mod1( cos * vector[0] + sin * vector[1])
-      var y = mod1(-sin * vector[0] + cos * vector[1])
+      var x = utils.mod1( cos * vector[0] + sin * vector[1])
+      var y = utils.mod1(-sin * vector[0] + cos * vector[1])
       vector[0] = x
       vector[1] = y
       vector[5] = correct_yaw_grid_coords
-    
 
-
-
-    }
-    
+    }  
     if (error < .04 * screen_points.length){
-
-
-      $("#transform").text(vector)
       window.transforms.push({'imu_idx': imu_idx, 'transform': vector, 'lines': split_lines})
+      $("#transform").text(vector)
+      kalman.update_position(vector, orientation_events[imu_idx].time)
+      console.log(Date.now() / 1000 - orientation_events[imu_idx].time)
     
       $("#error").text(error)
       $("#offset").text((offset * 180 / Math.PI) % 90)
 
-
-
-      
-      window.trackingctx = document.getElementById("tracking").getContext("2d")
-
-      window.trackingctx.fillStyle = "rgba(255,255,255,1)"
-      window.trackingctx.fillRect(0, 0, 128, 128)
-      window.trackingctx.fillStyle = "rgba(255,0,0,1)"
-      window.trackingctx.fillRect(128 * x, 128 - 128 * y, 4, 4)
-
-
-      
     }
 
-      
- 
-    
     dst.delete();
   }
 

@@ -49,8 +49,8 @@ def linestotransform():
 @app.route('/uploadtrack', methods=["POST"])
 def uploadtrack():
     json = request.get_json()
-    print([trans["imu_idx"] for trans in json["transforms"]])
-    
+    pickle.dump(json, open("trajectory/" + "S"+ ".pickle", "wb"))
+    pickle.dump(json, open("trajectory/" + str(time.time()) + ".pickle", "wb"))
 
 
     return ""

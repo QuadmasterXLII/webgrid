@@ -1,4 +1,6 @@
 import * as $ from 'jquery'
+import * as kalman from "./kalman"
+import * as utils from "./utils"
 
 import * as gridslam from "./gridslam"
 
@@ -29,6 +31,21 @@ async function init () {
   
   
   gridslam.init()
+
+  kalman.setCallback ( (x) => {
+      
+      
+      var input_shape = gridslam.input_shape
+
+      window.trackingctx = document.getElementById("tracking").getContext("2d")
+
+      window.trackingctx.fillStyle = "rgba(255,255,255,1)"
+      window.trackingctx.fillRect(0, 0, input_shape, input_shape)
+      window.trackingctx.fillStyle = "rgba(255,0,0,1)"
+      window.trackingctx.fillRect(input_shape * utils.mod1(x[0].data32F[0]), input_shape - input_shape * utils.mod1(x[1].data32F[0]), 4, 4)
+
+
+  })
   $('#save').click(function () {
     $.ajax({
       type: 'POST',
@@ -37,7 +54,8 @@ async function init () {
       data: JSON.stringify({
         "orientation_events": gridslam.orientation_events,
         "acceleration_events":gridslam.acceleration_events,
-        "transforms":window.transforms
+        "transforms":window.transforms,
+        "imu_yaw2grid_yaw_delta": gridslam.imu_yaw2grid_yaw_delta
       }),
       datatype: 'json'
     })
@@ -65,7 +83,7 @@ async function init () {
   })
   $('#submit').click(function () {
   	recording = !recording
-    window.webcam.webcamElement.width = recording ? 512 : 128
+    window.webcam.webcamElement.width = recording ? 512 : gridslam.input_shape
     window.webcam.webcamElement.height = window.webcam.webcamElement.width
 
     $('#submit').text( recording ? "Stop Recording" : "Record and Upload")
@@ -79,15 +97,16 @@ async function init () {
     if(cv.Mat && window.webcam){
       $(".loading-fade").hide()
       $(".loading-msg").hide()
+      kalman.init()
       clickrun()
     }
     else setTimeout(checkLoadingDone, 130)
   }
-  setTimeout(checkLoadingDone, 500)
+  setTimeout(checkLoadingDone, 50)
   
 }
 
 function initAwait () {
   init()
 }
-window.onload = initAwait
+cv['onRuntimeInitialized'] = initAwait
