@@ -48351,7 +48351,8 @@ function getlines(array, imu_idx) {
     var imu = orientation_events[imu_idx] || {
       alpha: 0,
       beta: 0,
-      gamma: 0
+      gamma: 0,
+      time: Date.now() / 1000
     };
     var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma / 180 * Math.PI, -imu.alpha / 180 * Math.PI, 4 / 3 * 117];
     var res = solve_minimum(vector, screen_points, world_points);
@@ -48402,10 +48403,14 @@ function getlines(array, imu_idx) {
       vector[5] = correct_yaw_grid_coords;
     }
     if (error < .1 * screen_points.length) {
-      window.transforms.push({ 'imu_idx': imu_idx, 'transform': vector, 'lines': split_lines });
+      window.transforms.push({
+        'imu_idx': imu_idx,
+        'transform': vector,
+        'lines': split_lines
+      });
       jquery__WEBPACK_IMPORTED_MODULE_4__("#transform").text(vector);
-      _kalman__WEBPACK_IMPORTED_MODULE_3__["update_position"](vector, orientation_events[imu_idx].time);
-      console.log(Date.now() / 1000 - orientation_events[imu_idx].time);
+      _kalman__WEBPACK_IMPORTED_MODULE_3__["update_position"](vector, imu.time);
+      //console.log(Date.now() / 1000 - orientation_events[imu_idx].time)
 
       jquery__WEBPACK_IMPORTED_MODULE_4__("#error").text(error);
       jquery__WEBPACK_IMPORTED_MODULE_4__("#offset").text(offset * 180 / Math.PI % 90);
@@ -48654,7 +48659,7 @@ async function init() {
         jquery__WEBPACK_IMPORTED_MODULE_0__(".loading-fade").hide();
         jquery__WEBPACK_IMPORTED_MODULE_0__(".loading-msg").hide();
         _kalman__WEBPACK_IMPORTED_MODULE_1__["init"]();
-        clickrun();
+        setTimeout(clickrun, 130);
       } else {
         setTimeout(checkLoadingDone, 130);
       }
