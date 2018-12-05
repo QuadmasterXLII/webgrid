@@ -79,13 +79,15 @@ export function mat32FToArray(mat) {
   }
   return res
 }
-
+var input_shape = 128
 export function project_points(vector, world_points){
   var sin = Math.sin
   var cos = Math.cos
   var pi = Math.PI
   var height = input_shape
   var width = input_shape / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
+
+
 
   var x = vector[0]
   var y = vector[1]
@@ -95,11 +97,11 @@ export function project_points(vector, world_points){
   var yaw = vector[5]
   var focallength = vector[6]
 
-  screen_points = []
+  var screen_points = []
 
   let x0  =  sin(roll)
   let x1  =  cos(pitch)
-  let x2  =  world_z*x1
+
   let x3  =  x1*z
   let x4  =  cos(roll)
   let x5  =  cos(yaw)
@@ -115,7 +117,7 @@ export function project_points(vector, world_points){
   let x15  =  x11*x7 - x12
   let x17  =  x1*x8
   let x18  =  x1*x5
-  let x_19 = x*x15 + x14*y + x2*x4 + x3*x4
+  
 
 
   for(var i = 0; i < world_points.length; ++i) {
@@ -123,10 +125,11 @@ export function project_points(vector, world_points){
     var world_x= world_point[0]
     var world_y = world_point[1]
     var world_z = world_point[2]
-
-    
+    let x2  =  world_z*x1
+    let x_19 = x*x15 + x14*y + x2*x4 + x3*x4
     let x16  =  focallength/(world_x*x15 + world_y*x14 + x_19)
-    screen_points.push([height/2 - x16*(world_x*x10 + world_y*x13 + x*x10 + x0*x2 + x0*x3 + x13*y), width/2 - x16*(world_x*x17 + world_y*x18 - world_z*x7 + x*x17 + x18*y - x7*z)])
+    screen_points.push([width/2 - x16*(world_x*x10 + world_y*x13 + x*x10 + x0*x2 + x0*x3 + x13*y), 
+      (height/2 - x16*(world_x*x17 + world_y*x18 - world_z*x7 + x*x17 + x18*y - x7*z)) * window.webcam.webcamElement.videoWidth / window.webcam.webcamElement.videoHeight ])
 
   }
   return screen_points

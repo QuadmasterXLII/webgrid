@@ -32,6 +32,8 @@ async function init () {
   
   await gridslam.init()
 
+  
+
   kalman.setCallback ( (x) => {
       
       
@@ -45,6 +47,13 @@ async function init () {
       window.trackingctx.fillRect(
         input_shape * utils.mod1(x[0].data32F[0]), 
         input_shape - input_shape * utils.mod1(x[1].data32F[0]),
+        4, 4
+      )
+
+      window.trackingctx.fillStyle = "rgba(0, 0,255,1)"
+      window.trackingctx.fillRect(
+        8, 
+        input_shape - input_shape * utils.mod1(x[2].data32F[0]),
         4, 4
       )
 

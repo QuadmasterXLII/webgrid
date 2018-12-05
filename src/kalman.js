@@ -72,10 +72,19 @@ export function update_position(vector, time) {
     //callback(x)
 }
 
+let acc_offset = [0, 0, 0]
+
 export function update_imu(orientation, acceleration, imu_yaw_delta, time) {
     if(!x || !orientation || !imu_yaw_delta || !position_initialized) {
         return
     }
+
+    for(let j = 0; j < 3; j++){
+      let component = ["x", "y", "z"][j]
+      acc_offset[j] = .993 * acc_offset[j] + .007 * acceleration[component]
+      acceleration[component] = acceleration[component] - acc_offset[j]
+    }
+
     var acc = world_acc(orientation, acceleration, imu_yaw_delta)
 
 
