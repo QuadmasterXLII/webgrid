@@ -13,7 +13,7 @@ function submitPhoto () {
   context.drawImage(window.webcam.webcamElement, 0, 0, 512, 512)
   $.ajax({
   	type:"POST",
-  	url:"http://ec2-18-188-175-17.us-east-2.compute.amazonaws.com:4000/imageupload/" + (Math.random() + sessionid), 
+  	url:"https://webgrid.hgreer.com/imageupload/" + (Math.random() + sessionid), 
   	data: {
   		image: document.getElementById("cameraframe").toDataURL('image/png')
   	}
@@ -67,7 +67,7 @@ async function init () {
     $.ajax({
       type: 'POST',
       contentType: 'application/json; charset=utf-8',
-      url: '/uploadtrack',
+      url: 'https://webgrid.hgreer.com/uploadtrack',
       data: JSON.stringify({
         "orientation_events": gridslam.orientation_events,
         "acceleration_events":gridslam.acceleration_events,
