@@ -2,8 +2,6 @@ from flask import Flask, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from binascii import a2b_base64
-import registerFromImage
-import numpy as np
 
 import time
 import pickle
@@ -41,4 +39,4 @@ def uploadtrack():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=4000, ssl_context=('/etc/letsencrypt/live/webgrid.hgreer.com/cert.pem','/etc/letsencrypt/live/webgrid.hgreer.com/privkey.pem'))
+    app.run(host="0.0.0.0", port=4000, ssl_context='adhoc')
