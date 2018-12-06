@@ -12,6 +12,14 @@ export let input_shape = 128
 export var orientation_events = []
 export var acceleration_events = []
 window.transforms = []
+
+export var map 
+
+export var orientationOffset = [0, 0]
+export function setOrientationOffset(o) {
+  orientationOffset = o
+} 
+
 export async function init() {
 
   window.model = await tf.loadModel('/webgrid/static/tfjs_dir/model.json')
@@ -29,8 +37,8 @@ export async function init() {
       orientation_events.push({
         time: Date.now() / 1000,
         alpha: evt.alpha,
-        beta: evt.beta,
-        gamma: evt.gamma
+        beta: evt.beta + orientationOffset[0],
+        gamma: evt.gamma + orientationOffset[1]
       })
       /*
       $('#alpha').text(evt.alpha)
@@ -61,6 +69,21 @@ export async function init() {
     console.log('No DeviceOrientationEvent')
   }
   kalman.init()
+  map = {
+    img: cv.Mat.zeros(256, 256, cv.CV_8UC3),
+    origin: [128, 128],
+    pixPerSquare: 64,
+    world2pix: (x, y) => {
+      return [Math.round(-x * map.pixPerSquare + map.origin[0]),
+       Math.round(y * map.pixPerSquare + map.origin[1])]
+    },
+    set: (x, y, color) => {
+      var pix = map.world2pix(x, y)
+      map.img.data8S[3 * pix[0] + 3 * map.img.rows * pix[1]] = color[0]
+      map.img.data8S[3 * pix[0] + 3 * map.img.rows * pix[1] + 1] = color[1]
+      map.img.data8S[3 * pix[0] + 3 * map.img.rows * pix[1] + 2] = color[2]
+    }
+  }
 } 
 export var running = false
 export function setRunning(r){
@@ -72,21 +95,27 @@ export async function runmodel () {
   //console.log("Error:, ", Date.now() / 1000 - orientation_events[imu_idx].time) 
   var output = tf.tidy(() => {
     var image = window.webcam.capture()
-    window.image = image
+    
  
     var output = window.model.predict(image)
 
     output = tf.reshape(output, [input_shape, input_shape, 2])
     //output = tf.concat([output, tf.add(1, tf.mul(-0.001, output))], 2)
 
-    return output.add(-0.5).mul(3000).clipByValue(0, 1).slice([0, 0, 1], [input_shape, input_shape, 1])
+    return [
+      output.add(-0.5).mul(3000).clipByValue(0, 1).slice([0, 0, 1], [input_shape, input_shape, 1]),
+      image
+    ]
   })
   //tf.toPixels(output, document.getElementById('segmentation'))
   //log('done')
 
-  window.output_array = await output.data()
+  var output_array = await output[0].data()
+  output[0].dispose()
+  var image = await output[1].data()
+  output[1].dispose()
   setTimeout(()=> {
-    getlines(window.output_array, imu_idx)
+    getlines(output_array, image, imu_idx)
     //running = false;
     if (running) {
       setTimeout(runmodel, 5)
@@ -254,6 +283,7 @@ function split(lines) {
 export var imu_yaw2grid_yaw_delta
 var has_run_once = false
 export function resetMap() {
+  map.img = cv.Mat.zeros(256, 256, cv.CV_8UC3)
   has_run_once = false
   window.transforms = []
   acceleration_events = []
@@ -262,8 +292,9 @@ export function resetMap() {
 
 }
 window.prune_strat = "mostvotes"
-function getlines (array, imu_idx) {
+function getlines (array, image, imu_idx) {
   window.mat = cv.matFromArray(input_shape, input_shape, cv.CV_32F, array)
+  var raw_image = cv.matFromArray(input_shape, input_shape, cv.CV_32FC3, image)
   var gr = new cv.Mat()
   mat.convertTo(mat, cv.CV_8UC1)
   cv.threshold(mat, gr, .5, 256, cv.THRESH_BINARY_INV)
@@ -280,17 +311,22 @@ function getlines (array, imu_idx) {
     cv.erode(gr, gr, elem)
   }
   
-  cv.imshow('skeleton', skele)
-  mat.delete(); gr.delete(); temp.delete()
+  /*mat.delete();*/ gr.delete(); temp.delete()
   let dst = cv.Mat.zeros(skele.rows, skele.cols, cv.CV_8UC3);
+
+  cv.cvtColor(skele, dst, cv.COLOR_GRAY2RGB)
+
   let lines = new cv.Mat();
 
   cv.HoughLines(skele, lines, 1, Math.PI / 180,
               27, 0, 0, 0, Math.PI);
+
+  skele.delete()
+
   utils.drawLines(lines, dst, [76, 0, 0, 255])
   if (lines.rows < 2){
     cv.imshow('lines', dst);
-    dst.delete()
+    dst.delete(); raw_image.delete()
     return
   }
   
@@ -316,163 +352,208 @@ function getlines (array, imu_idx) {
   var preference = -.6;
   var cluster_result = apclust.getClusters(lineDistMat, {preference:preference, damping:.5})
   
-  if (cluster_result.exemplars.length > 1){
-    var lines_pruned = []
-    if (window.prune_strat == "mostvotes"){
-      var cluster_exemplar_lookup = []
-      
-      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-        cluster_exemplar_lookup[cluster_result.exemplars[j]] = j
-        lines_pruned.push([0, 0, 0])
-      }
-      
-      for (let i = 0; i < lines.rows; ++i){
-        var cluster_idx = cluster_exemplar_lookup[cluster_result.clusters[i]]
-        
-        if(lines.data32F[i * 3 + 2] > lines_pruned[cluster_idx][2]){
-           let rho = lines.data32F[i * 3];
-           let theta = lines.data32F[i * 3 + 1];
-           let score = lines.data32F[i * 3 + 2];
-           
-           lines_pruned[cluster_idx] = [rho, theta, score]
-        }
-      }
-      for (let j = 0; j < cluster_result.exemplars.length; ++j) {     
-        let rho = lines_pruned[j][0];
-        let theta = lines_pruned[j][1];
-        let a = Math.cos(theta);
-        let b = Math.sin(theta);
-        let x0 = a * rho;
-        let y0 = b * rho;
-        let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
-        let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
-        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
-      }
-    } else {
-      for (let j = 0; j < cluster_result.exemplars.length; ++j) {
-        let i = cluster_result.exemplars[j]
-        let rho = lines.data32F[i * 3];
-        let theta = lines.data32F[i * 3 + 1];
-        lines_pruned.push([rho, theta])
-        let a = Math.cos(theta);
-        let b = Math.sin(theta);
-        let x0 = a * rho;
-        let y0 = b * rho;
-        let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
-        let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
-        cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
-      }
-    }
-
-    /*let i1 = utils.mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
-    let i2 = utils.mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
-    console.log(i1)
-    cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
-
-    var split_lines = split(lines_pruned)
-
-    utils.drawLinesJ(split_lines[0], dst, [0, 255, 0, 255])
-    utils.drawLinesJ(split_lines[1], dst, [255, 0, 255, 255])
-
-    if (lines_pruned.length < 3){
-      cv.imshow('lines', dst);
-      dst.delete()
-      return
-    }
-
-    split_lines[0] = sortlines(split_lines[0], split_lines[1])
-    split_lines[1] = sortlines(split_lines[1], split_lines[0])
-
-    console.log(split_lines)
-
-    var world_points = []
-    var screen_points = []
-
-    for(var i = 0; i < split_lines[0].length; ++i) {
-      var l1 = split_lines[0][i]
-      for( var j = 0; j < split_lines[1].length; ++j) {
-        var l2 = split_lines[1][j]
-        var x = utils.intersection(l1, l2)
-        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight]
-        screen_points.push(x)
-        world_points.push([i - 1, j - 1, 0])
-
-      } 
-    }
-    
+  if (cluster_result.exemplars.length <= 1){
     cv.imshow('lines', dst);
-    var imu = orientation_events[imu_idx] || {
-        alpha: 0,
-        beta: 0,
-        gamma: 0, 
-        time: Date.now() / 1000
-      }
-    var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma/ 180 * Math.PI, -imu.alpha/ 180 * Math.PI, (4/3) * 117]
-    var res = solve_minimum(vector, screen_points, world_points)
+    dst.delete(); raw_image.delete()
+    return
 
-    world_points = []
-    screen_points = []
-
-    for(var i = 0; i < split_lines[1].length; ++i) {
-      var l1 = split_lines[1][i]
-      for( var j = 0; j < split_lines[0].length; ++j) {
-        var l2 = split_lines[0][j]
-        var x = utils.intersection(l1, l2)
-        x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight]
-        screen_points.push(x)
-        world_points.push([i - 1, j - 1, 0])
-
-      } 
-    }
-
-    var res2 = solve_minimum(vector, screen_points, world_points)
-    var vector
-    var error
-    if(res2.error < res.error){
-      vector = res2.v
-      error = res2.error
-    } else {
-      vector = res.v
-      error = res.error
-    }
-
-    var offset
-    if (!has_run_once) {
-      if (split_lines[0].length == 1 || split_lines[1].length == 1 ){
-        return 
-      }
-      imu_yaw2grid_yaw_delta = vector[5] + imu.alpha / 180 * Math.PI
-      console.log(imu_yaw2grid_yaw_delta)
-      has_run_once = true
-    } else {
-      var correct_yaw_grid_coords = -imu.alpha / 180 * Math.PI + imu_yaw2grid_yaw_delta
-      offset = correct_yaw_grid_coords - vector[5]
-
-      var cos = Math.cos(offset)
-      var sin = Math.sin(offset)
-      var x = utils.mod1( cos * vector[0] + sin * vector[1])
-      var y = utils.mod1(-sin * vector[0] + cos * vector[1])
-      vector[0] = x
-      vector[1] = y
-      vector[5] = correct_yaw_grid_coords
-
-    }  
-    if (error < .1 * screen_points.length){
-      window.transforms.push({
-        'imu_idx': imu_idx,
-        'transform': vector,
-        'lines': split_lines
-      })
-      $("#transform").text(vector)
-      kalman.update_position(vector, imu.time)
-      //console.log(Date.now() / 1000 - orientation_events[imu_idx].time)
-    
-      $("#error").text(error)
-      $("#offset").text((offset * 180 / Math.PI) % 90)
-
-    }
-
-    dst.delete();
   }
+
+  var lines_pruned = []
+  if (window.prune_strat == "mostvotes"){
+    var cluster_exemplar_lookup = []
+    
+    for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+      cluster_exemplar_lookup[cluster_result.exemplars[j]] = j
+      lines_pruned.push([0, 0, 0])
+    }
+    
+    for (let i = 0; i < lines.rows; ++i){
+      var cluster_idx = cluster_exemplar_lookup[cluster_result.clusters[i]]
+      
+      if(lines.data32F[i * 3 + 2] > lines_pruned[cluster_idx][2]){
+         let rho = lines.data32F[i * 3];
+         let theta = lines.data32F[i * 3 + 1];
+         let score = lines.data32F[i * 3 + 2];
+         
+         lines_pruned[cluster_idx] = [rho, theta, score]
+      }
+    }
+    for (let j = 0; j < cluster_result.exemplars.length; ++j) {     
+      let rho = lines_pruned[j][0];
+      let theta = lines_pruned[j][1];
+      let a = Math.cos(theta);
+      let b = Math.sin(theta);
+      let x0 = a * rho;
+      let y0 = b * rho;
+      let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
+      let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
+      cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+    }
+  } else {
+    for (let j = 0; j < cluster_result.exemplars.length; ++j) {
+      let i = cluster_result.exemplars[j]
+      let rho = lines.data32F[i * 3];
+      let theta = lines.data32F[i * 3 + 1];
+      lines_pruned.push([rho, theta])
+      let a = Math.cos(theta);
+      let b = Math.sin(theta);
+      let x0 = a * rho;
+      let y0 = b * rho;
+      let startPoint = {x: x0 - 1000 * b, y: y0 + 1000 * a};
+      let endPoint = {x: x0 + 1000 * b, y: y0 - 1000 * a};
+      cv.line(dst, startPoint, endPoint, [255, 255, 0, 255]);
+    }
+  }
+
+  /*let i1 = utils.mat32FToArray(intersection(lines_pruned[0], lines_pruned[1]))
+  let i2 = utils.mat32FToArray(intersection(lines_pruned[1], lines_pruned[2]))
+  console.log(i1)
+  cv.line(dst, {x: i1[0][0], y:i1[1][0]}, {x: i2[0][0], y:i2[1][0]}, [0, 0, 255, 255])*/
+
+  var split_lines = split(lines_pruned)
+
+  utils.drawLinesJ(split_lines[0], dst, [0, 255, 0, 255])
+  utils.drawLinesJ(split_lines[1], dst, [255, 0, 255, 255])
+
+  if (lines_pruned.length < 3){
+    cv.imshow('lines', dst);
+    dst.delete(); raw_image.delete()
+    return
+  }
+
+  split_lines[0] = sortlines(split_lines[0], split_lines[1])
+  split_lines[1] = sortlines(split_lines[1], split_lines[0])
+
+  console.log(split_lines)
+
+  var world_points = []
+  var screen_points = []
+
+  for(var i = 0; i < split_lines[0].length; ++i) {
+    var l1 = split_lines[0][i]
+    for( var j = 0; j < split_lines[1].length; ++j) {
+      var l2 = split_lines[1][j]
+      var x = utils.intersection(l1, l2)
+      x = [
+        x.data32F[0],
+        x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight
+      ]
+      screen_points.push(x)
+      world_points.push([i - 1, j - 1, 0])
+
+    } 
+  }
+  
+  cv.imshow('lines', dst);
+  var imu = orientation_events[imu_idx] || {
+      alpha: 0,
+      beta: 0,
+      gamma: 0, 
+      time: Date.now() / 1000
+    }
+  var vector = [0, 0, -2.5, -imu.beta / 180 * Math.PI, -imu.gamma/ 180 * Math.PI, -imu.alpha/ 180 * Math.PI, (4/3) * 117]
+  var res = solve_minimum(vector, screen_points, world_points)
+
+  world_points = []
+  screen_points = []
+
+  for(var i = 0; i < split_lines[1].length; ++i) {
+    var l1 = split_lines[1][i]
+    for( var j = 0; j < split_lines[0].length; ++j) {
+      var l2 = split_lines[0][j]
+      var x = utils.intersection(l1, l2)
+      x = [x.data32F[0], x.data32F[1] / window.webcam.webcamElement.videoWidth * window.webcam.webcamElement.videoHeight]
+      screen_points.push(x)
+      world_points.push([i - 1, j - 1, 0])
+
+    } 
+  }
+
+  var res2 = solve_minimum(vector, screen_points, world_points)
+  var vector
+  var error
+  if(res2.error < res.error){
+    vector = res2.v
+    error = res2.error
+  } else {
+    vector = res.v
+    error = res.error
+  }
+
+  var offset
+  if (!has_run_once) {
+    if (split_lines[0].length == 1 || split_lines[1].length == 1 ){
+      cv.imshow('lines', dst);
+      dst.delete(); raw_image.delete()
+      return 
+    }
+    imu_yaw2grid_yaw_delta = vector[5] + imu.alpha / 180 * Math.PI
+    console.log(imu_yaw2grid_yaw_delta)
+    has_run_once = true
+  } else {
+    var correct_yaw_grid_coords = -imu.alpha / 180 * Math.PI + imu_yaw2grid_yaw_delta
+    offset = correct_yaw_grid_coords - vector[5]
+
+    var cos = Math.cos(offset)
+    var sin = Math.sin(offset)
+    var x = utils.mod1( cos * vector[0] + sin * vector[1])
+    var y = utils.mod1(-sin * vector[0] + cos * vector[1])
+    vector[0] = x
+    vector[1] = y
+    vector[5] = correct_yaw_grid_coords
+
+  }  
+  if (error < .1 * screen_points.length){
+    window.transforms.push({
+      'imu_idx': imu_idx,
+      'transform': vector,
+      'lines': split_lines
+    })
+    $("#transform").text(vector)
+    kalman.update_position(vector, imu.time)
+    //console.log(Date.now() / 1000 - orientation_events[imu_idx].time)
+  
+    $("#error").text(error)
+    $("#offset").text((offset * 180 / Math.PI) % 90)
+
+
+
+    //Map half of SLAM
+    /*
+    var world_points = Array.from({length: 14000}, () => [Math.random() * 4 - 2, Math.random() * 4 - 2, 0])
+    var cam_points = utils.project_points(vector, world_points)
+    
+    for(var i = 0; i < cam_points.length; ++i)
+    {
+      var cam_point = cam_points[i]
+      if(cam_point[0] > 0 && cam_point[0] < 128 &&
+         cam_point[1] > 0 && cam_point[1] < 128) {
+        var idx = 3 * Math.round(cam_point[0]) + 3 * Math.round(cam_point[1]) * input_shape
+        var color = [
+          230 * raw_image.data32F[idx],
+          230 * raw_image.data32F[idx + 1],
+          230 * raw_image.data32F[idx + 2]
+        ]
+        map.set(world_points[i][0], world_points[i][1], color)
+
+      }
+    }
+    mat.delete()
+    
+    cv.imshow('map', map.img)
+    var pix = map.world2pix(-vector[0], -vector[1])
+    var context = document.getElementById("map").getContext("2d")
+
+    context.fillStyle = "rgba(255,0,0,1)"
+    context.fillRect(
+      pix[0] - 4, 
+      pix[1] - 4,
+      8, 8
+    )
+   */ 
+  }
+  dst.delete(); raw_image.delete()
+
 
 }
