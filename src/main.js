@@ -104,6 +104,13 @@ async function init () {
       submitPhoto()
   	}
   });
+  
+  document.getElementById("pitchOffset").oninput = () => {
+    gridslam.orientationOffset[0] = parseFloat(document.getElementById("pitchOffset").value) / 10
+  }
+  document.getElementById("rollOffset").oninput = () => {
+    gridslam.orientationOffset[1] = parseFloat(document.getElementById("rollOffset").value) / 10
+  }
 
   
   function checkLoadingDone() {

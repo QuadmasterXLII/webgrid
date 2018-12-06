@@ -14,6 +14,12 @@ export var acceleration_events = []
 window.transforms = []
 
 export var map 
+
+export var orientationOffset = [0, 0]
+export function setOrientationOffset(o) {
+  orientationOffset = o
+} 
+
 export async function init() {
 
   window.model = await tf.loadModel('/static/tfjs_dir/model.json')
@@ -31,8 +37,8 @@ export async function init() {
       orientation_events.push({
         time: Date.now() / 1000,
         alpha: evt.alpha,
-        beta: evt.beta,
-        gamma: evt.gamma
+        beta: evt.beta + orientationOffset[0],
+        gamma: evt.gamma + orientationOffset[1]
       })
       /*
       $('#alpha').text(evt.alpha)
