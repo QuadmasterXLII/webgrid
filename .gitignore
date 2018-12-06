@@ -8,4 +8,4 @@ image_uploads/*
 image_uploads_small/*
 *.ipynb
 .ipynb_checkpoints/*
-
+*.pem

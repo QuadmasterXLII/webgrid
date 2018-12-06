@@ -1,8 +1,14 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from binascii import a2b_base64
+import registerFromImage
+import numpy as np
+
+import time
+import pickle
 app = Flask(__name__)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 @app.route("/")
 def hello():
@@ -23,5 +29,16 @@ def imageupload(name):
         out.close()
     return ''
 
+@app.route('/uploadtrack', methods=["POST"])
+def uploadtrack():
+    json = request.get_json()
+    pickle.dump(json, open("trajectory/" + "S"+ ".pickle", "wb"))
+    pickle.dump(json, open("trajectory/" + str(time.time()) + ".pickle", "wb"))
+
+
+    return ""
+
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=4000, ssl_context='adhoc')
+    app.run(host="0.0.0.0", port=4000, ssl_context=('/etc/letsencrypt/live/webgrid.hgreer.com/cert.pem','/etc/letsencrypt/live/webgrid.hgreer.com/privkey.pem'))
