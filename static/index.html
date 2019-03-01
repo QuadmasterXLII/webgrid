@@ -34,6 +34,7 @@
         <button id="calibrateC" class="btn btn-primary"> Calibrate </button>
         <button id="resetMap" class="btn btn-primary"> Reset </button>
       </div>
+      
       Transform: <span id=transform></span><br>
       Error: <span id=error></span><br>
       Offset: <span id=offset></span><br>
@@ -42,6 +43,17 @@
       Gamma: <span id=gamma></span><br/>
       <br>
       Webkit: <span id=webkit></span><br/>
+      <br>
+      <h1>Requirements:</h1>
+      <br>
+      This application requires access to the camera for detecting ceiling tile edges, and the device accelerometer for
+      tracking orientation. It also assumes the standard accelerometer to camera transform found on mobile phones, which 
+      means on a desktop or laptop, it will not be able to calculate transform parameters.<br>
+      It also requires a view of standard 2' x 2' drop ceiling tiles.<br>
+      Once the device knows its position, it will render the device's horizontal position as a red dot, and its height as a blue dot.
+      These dots' positions wrap around in their box.
+      <br>
+      If either dot is moving erratically, press Reset to reset the Kalman Filter.
       <span id=log></span>
 
       <div>
