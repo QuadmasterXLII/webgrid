@@ -27,7 +27,7 @@
     "fmin": "^0.0.2",
     "gaussian-mixture-model": "^1.0.0",
     "itk": "^9.1.2",
-    "jquery": "^3.3.1",
+    "jquery": "^3.5.0",
     "node-sass": "^4.13.1",
     "react": "^16.6.0",
     "react-dom": "^16.6.0",
